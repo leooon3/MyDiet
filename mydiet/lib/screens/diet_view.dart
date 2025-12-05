@@ -101,22 +101,16 @@ class DietView extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 16.0),
           child: MealCard(
-            // Non passiamo più 'day' dentro MealCard perché la chiave viene generata internamente
-            // Ma per coerenza con la chiave globale, MealCard userà il nome pasto.
-            // NOTA: Assicurati che MealCard usi "${day}_${mealName}" se vuoi chiavi univoche per giorno!
-            // Per semplicità qui passo una stringa univoca composta al MealCard se necessario,
-            // ma il tuo MealCard attuale usa 'mealName'.
-            // CORREZIONE AL VOLO: Passiamo 'day' al MealCard modificato sotto (vedi punto 4 se non l'hai fatto)
-            // Se MealCard non accetta 'day', modifica MealCard per accettarlo o concatena qui.
-            // Assumo MealCard aggiornato come da step precedente.
+            day: day, // <--- PASSAGGIO DEL GIORNO AGGIUNTO
+            isTranquilMode:
+                isTranquilMode, // <--- PASSAGGIO MODALITÀ RELAX AGGIUNTO
             mealName: mealName,
             foods: foods,
             activeSwaps: activeSwaps,
-            // Qui passiamo la logica di callback
-            onSwap: (String groupKey, int cad) {
-              // Ricostruiamo la chiave globale: Giorno_Pasto_Gruppo
-              String globalKey = "${day}_$groupKey";
-              onSwap(globalKey, cad);
+            onSwap: (String fullKey, int cad) {
+              // La chiave arriva già completa dalla MealCard (es. Lunedì_Pranzo_group_0)
+              // La passiamo direttamente alla logica principale
+              onSwap(fullKey, cad);
             },
           ),
         );

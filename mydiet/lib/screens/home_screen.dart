@@ -9,7 +9,8 @@ import '../services/api_service.dart';
 import '../constants.dart';
 import 'diet_view.dart';
 import 'pantry_view.dart';
-import 'shopping_list_view.dart'; // <--- Importante!
+import 'shopping_list_view.dart';
+import 'notification_settings_view.dart'; // <--- 1. IMPORT NUOVO
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -23,7 +24,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? substitutions;
   Map<String, ActiveSwap> activeSwaps = {};
   List<PantryItem> pantryItems = [];
-  List<String> shoppingList = []; // <--- Nuova lista spesa
+  List<String> shoppingList = [];
 
   bool isLoading = true;
   bool isUploading = false;
@@ -92,7 +93,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       );
     }
 
-    // 4. Lista Spesa (NUOVO)
+    // 4. Lista Spesa
     List<String>? savedList = prefs.getStringList('shoppingList');
     if (savedList != null) {
       setState(() => shoppingList = savedList);
@@ -136,7 +137,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       );
     }
 
-    // Salvataggio Lista Spesa
     prefs.setStringList('shoppingList', shoppingList);
   }
 
@@ -146,11 +146,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
     for (String item in shoppingList) {
       if (item.startsWith("OK_")) {
-        // 1. Pulisce la stringa: "OK_Mela (2 pz)" -> "Mela (2 pz)"
         String clean = item.substring(3).trim();
-
-        // 2. Regex per estrarre nome, quantità e unità
-        // Cerca pattern tipo: "Nome Cibo (100 g)" oppure "Nome (2 pz)"
         final regex = RegExp(r'^(.*)\s+\((\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)\)$');
         final match = regex.firstMatch(clean);
 
@@ -159,22 +155,18 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         String unit;
 
         if (match != null) {
-          // Caso formattato: "Pasta (500 g)"
           name = match.group(1)!.trim();
           qty = double.tryParse(match.group(2)!.replaceAll(',', '.')) ?? 1.0;
           unit = match.group(3)!.trim();
         } else {
-          // Caso semplice: "Dentifricio" -> default 1 pz
           name = clean;
           qty = 1.0;
           unit = 'pz';
         }
 
-        // 3. Aggiunge alla dispensa
         _addOrUpdatePantry(name, qty, unit);
         movedCount++;
       } else {
-        // Se non è spuntato, rimane nella lista spesa
         remainingList.add(item);
       }
     }
@@ -479,9 +471,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  // --- NUOVA LOGICA SOSTITUZIONI ---
+  // --- LOGICA SOSTITUZIONI ---
   void _showSubstitutions(String swapKey, int cadCode) {
-    // 1. Convertiamo il codice in stringa per cercare nel JSON
     String cadKey = cadCode.toString();
 
     if (substitutions == null || !substitutions!.containsKey(cadKey)) {
@@ -517,14 +508,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 itemCount: options.length,
                 itemBuilder: (context, i) {
                   var opt = options[i];
-                  // Controllo: l'opzione ha ingredienti o è semplice?
-                  // Se il JSON delle sostituzioni ha una lista "ingredients", la usiamo.
-                  // Altrimenti usiamo l'oggetto stesso come unico ingrediente.
                   List<dynamic> newIngredients = [];
                   if (opt['ingredients'] != null) {
                     newIngredients = opt['ingredients'];
                   } else {
-                    newIngredients = [opt]; // Fallback compatibile
+                    newIngredients = [opt];
                   }
 
                   return ListTile(
@@ -538,13 +526,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     trailing: const Icon(Icons.check_circle_outline),
                     onTap: () {
                       setState(() {
-                        // Creiamo lo swap "Composito"
                         activeSwaps[swapKey] = ActiveSwap(
-                          name:
-                              opt['name'], // Nome del piatto (es. "Riso e Pollo")
-                          qty: "", // Non serve più per i gruppi
-                          swappedIngredients:
-                              newIngredients, // TUTTA LA LISTA NUOVA
+                          name: opt['name'],
+                          qty: "",
+                          swappedIngredients: newIngredients,
                         );
                       });
                       _saveLocalData();
@@ -558,8 +543,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         ),
       ),
     );
-  } // --- COSTRUZIONE UI ---
+  }
 
+  // --- COSTRUZIONE UI ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -622,7 +608,25 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 floating: true,
                 pinned: true,
                 actions: [
-                  if (_currentIndex == 0)
+                  // --- 2. MODIFICA: ICONA NOTIFICHE ---
+                  // Visibile solo nella Tab 0 (Dieta)
+                  if (_currentIndex == 0) ...[
+                    IconButton(
+                      icon: const Icon(
+                        Icons.notifications_active_outlined,
+                        color: Colors.black87,
+                      ),
+                      tooltip: "Impostazioni Notifiche",
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const NotificationSettingsView(),
+                          ),
+                        );
+                      },
+                    ),
                     IconButton(
                       icon: Icon(
                         isTranquilMode ? Icons.spa : Icons.spa_outlined,
@@ -648,6 +652,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                         );
                       },
                     ),
+                  ],
                   if (_currentIndex == 2)
                     IconButton(
                       icon: const Icon(

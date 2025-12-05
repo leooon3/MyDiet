@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import '../models/active_swap.dart'; // <--- Import necessario per gestire le sostituzioni
+import '../models/active_swap.dart';
 
 class ShoppingListView extends StatefulWidget {
   final List<String> shoppingList;
-  final Map<String, dynamic>? dietData; // La dieta serve per l'importazione
-  final Map<String, ActiveSwap>
-  activeSwaps; // <--- Nuova variabile: le tue sostituzioni
-  final Function(List<String>) onUpdateList; // Per salvare le modifiche
+  final Map<String, dynamic>? dietData;
+  final Map<String, ActiveSwap> activeSwaps;
+  final Function(List<String>) onUpdateList;
 
   const ShoppingListView({
     super.key,
     required this.shoppingList,
     required this.dietData,
-    required this.activeSwaps, // <--- Richiesto nel costruttore
+    required this.activeSwaps,
     required this.onUpdateList,
   });
 
@@ -21,7 +20,6 @@ class ShoppingListView extends StatefulWidget {
 }
 
 class _ShoppingListViewState extends State<ShoppingListView> {
-  // Contiene le chiavi univoche dei pasti selezionati: "Lunedì_Pranzo", "Giovedì_Cena"
   final Set<String> _selectedMealKeys = {};
 
   final List<String> _allDays = [
@@ -34,18 +32,15 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     "Domenica",
   ];
 
-  // Restituisce i giorni ordinati partendo da OGGI
   List<String> _getOrderedDays() {
-    int todayIndex = DateTime.now().weekday - 1; // 0 = Lunedì
+    int todayIndex = DateTime.now().weekday - 1;
     if (todayIndex < 0 || todayIndex > 6) todayIndex = 0;
-
     return [
       ..._allDays.sublist(todayIndex),
       ..._allDays.sublist(0, todayIndex),
     ];
   }
 
-  // --- LOGICA DIALOGO IMPORTAZIONE ---
   void _showImportDialog() {
     if (widget.dietData == null) {
       ScaffoldMessenger.of(
@@ -75,7 +70,6 @@ class _ShoppingListViewState extends State<ShoppingListView> {
 
                     if (dayPlan == null) return const SizedBox.shrink();
 
-                    // Troviamo i nomi dei pasti validi per questo giorno
                     final mealNames = dayPlan.keys.where((k) {
                       var foods = dayPlan[k];
                       return foods is List && foods.isNotEmpty;
@@ -83,18 +77,14 @@ class _ShoppingListViewState extends State<ShoppingListView> {
 
                     if (mealNames.isEmpty) return const SizedBox.shrink();
 
-                    // Chiavi univoche per tutti i pasti di questo giorno
                     final allDayKeys = mealNames
                         .map((m) => "${day}_$m")
                         .toList();
-
-                    // Check: Sono TUTTI selezionati?
                     bool areAllSelected = allDayKeys.every(
                       (k) => _selectedMealKeys.contains(k),
                     );
 
                     return ExpansionTile(
-                      // Checkbox Principale per il Giorno Intero
                       leading: Checkbox(
                         value: areAllSelected,
                         activeColor: Colors.green,
@@ -167,88 +157,92 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     );
   }
 
-  // --- LOGICA AGGREGAZIONE MODIFICATA ---
   void _generateListFromSelection() {
     if (_selectedMealKeys.isEmpty) return;
 
-    // Mappa: NomeCibo -> {qty: totale, unit: 'g'}
     Map<String, Map<String, dynamic>> aggregator = {};
-    for (String key in _selectedMealKeys) {
-      var parts = key.split('_');
-      var day = parts[0];
-      var meal = parts[1];
 
-      List<dynamic>? foods = widget.dietData![day]?[meal];
-      if (foods == null) continue;
+    try {
+      for (String key in _selectedMealKeys) {
+        var parts = key.split('_');
+        var day = parts[0];
+        var meal = parts.sublist(1).join('_');
 
-      // 1. Dobbiamo ricostruire i gruppi anche qui per mantenere la coerenza con le chiavi
-      List<List<dynamic>> groupedFoods = [];
-      if (foods.isNotEmpty) {
-        List<dynamic> currentGroup = [foods[0]];
-        for (int i = 1; i < foods.length; i++) {
-          var prev = foods[i - 1];
-          var curr = foods[i];
-          int prevCad = int.tryParse(prev['cad'].toString()) ?? 0;
-          int currCad = int.tryParse(curr['cad'].toString()) ?? 0;
-          if (prevCad != 0 && prevCad == currCad) {
-            currentGroup.add(curr);
-          } else {
-            groupedFoods.add(currentGroup);
-            currentGroup = [curr];
-          }
-        }
-        groupedFoods.add(currentGroup);
-      }
+        List<dynamic>? foods = widget.dietData![day]?[meal];
+        if (foods == null) continue;
 
-      // 2. Iteriamo sui gruppi
-      for (int i = 0; i < groupedFoods.length; i++) {
-        var group = groupedFoods[i];
+        // --- LOGICA IDENTICA A MEAL CARD (Single vs Groups) ---
+        List<List<dynamic>> groupedFoods = [];
+        List<dynamic> currentGroup = [];
 
-        // Ricostruiamo la stessa chiave usata in MealCard
-        // Attenzione: deve coincidere con quella generata in MealCard!
-        // In MealCard era: "${mealName}_group_$groupIndex" -> qui mealName è 'meal' (es. Pranzo)
-        // Ma nel codice precedente di MealCard in home la stringa passata è la key completa?
-        // Verifichiamo come passi 'mealName'. Solitamente è "Colazione", "Pranzo".
-        String swapKey = "${meal}_group_$i"; // Es. Pranzo_group_0
-
-        // Lista di ingredienti da aggiungere (originali o sostituiti)
-        List<dynamic> itemsToAdd = group;
-
-        if (widget.activeSwaps.containsKey(swapKey)) {
-          final swap = widget.activeSwaps[swapKey]!;
-          // Se lo swap contiene una lista completa di ingredienti (Logica Piatto)
-          if (swap.swappedIngredients != null &&
-              swap.swappedIngredients!.isNotEmpty) {
-            itemsToAdd = swap.swappedIngredients!;
-          }
-          // Fallback per vecchi swap singoli (opzionale)
-          else {
-            itemsToAdd = [
-              {'name': swap.name, 'qty': swap.qty, 'unit': swap.unit},
-            ];
-          }
-        }
-
-        // Aggiungi all'aggregatore
-        for (var food in itemsToAdd) {
-          // Gestione robusta dei campi (alcuni JSON hanno 'qta' o 'qty')
-          String name = food['name'];
+        for (var food in foods) {
           String qty = food['qty']?.toString() ?? "";
-          _addToAggregator(aggregator, name, qty);
+          bool isHeader = qty == "N/A";
+
+          if (isHeader) {
+            if (currentGroup.isNotEmpty) {
+              groupedFoods.add(List.from(currentGroup));
+            }
+            currentGroup = [food];
+          } else {
+            if (currentGroup.isNotEmpty) {
+              currentGroup.add(food);
+            } else {
+              groupedFoods.add([food]); // Elemento singolo
+            }
+          }
+        }
+        if (currentGroup.isNotEmpty) groupedFoods.add(List.from(currentGroup));
+        // -----------------------------------------------------------
+
+        for (int i = 0; i < groupedFoods.length; i++) {
+          var group = groupedFoods[i];
+
+          String swapKey = "${day}_${meal}_group_$i";
+
+          List<dynamic> itemsToAdd = group;
+
+          if (widget.activeSwaps.containsKey(swapKey)) {
+            final swap = widget.activeSwaps[swapKey]!;
+            if (swap.swappedIngredients != null &&
+                swap.swappedIngredients!.isNotEmpty) {
+              itemsToAdd = swap.swappedIngredients!;
+            } else {
+              itemsToAdd = [
+                {'name': swap.name, 'qty': swap.qty, 'unit': swap.unit},
+              ];
+            }
+          }
+
+          for (var food in itemsToAdd) {
+            String name = food['name'];
+            String qtyStr = food['qty']?.toString() ?? "";
+
+            // Ignoriamo gli header (qty N/A) a meno che non siano piatti unici sostituiti
+            if (qtyStr == "N/A" && itemsToAdd.length > 1) continue;
+
+            _addToAggregator(aggregator, name, qtyStr);
+          }
         }
       }
+    } catch (e) {
+      debugPrint("Errore durante la generazione della lista: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Errore interno nella generazione dei dati."),
+        ),
+      );
+      return;
     }
 
-    // Convertiamo la mappa in lista stringhe
     List<String> newList = List.from(widget.shoppingList);
-
     aggregator.forEach((name, data) {
       double total = data['qty'];
       String unit = data['unit'];
       String entry = "";
 
       if (total == 0) {
-        entry = name; // Fallback se non c'è numero
+        entry = name;
       } else {
         String numDisplay = total % 1 == 0
             ? total.toInt().toString()
@@ -256,7 +250,6 @@ class _ShoppingListViewState extends State<ShoppingListView> {
         entry = "$name ($numDisplay $unit)";
       }
 
-      // Evitiamo duplicati identici
       if (!newList.contains(entry)) {
         newList.add(entry);
       }
@@ -268,6 +261,7 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("Aggiunti ${aggregator.length} prodotti alla lista!"),
+        backgroundColor: Colors.green[700],
       ),
     );
   }
@@ -277,7 +271,6 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     String name,
     String qtyStr,
   ) {
-    // Regex: trova numeri (es. 100, 100.5, 1,5)
     final regExp = RegExp(r'(\d+(?:[.,]\d+)?)');
     final match = regExp.firstMatch(qtyStr);
 
@@ -293,32 +286,24 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     }
 
     String cleanName = name.trim();
+    String key = unit.isEmpty ? cleanName : "$cleanName ($unit)";
 
-    if (agg.containsKey(cleanName)) {
-      // Se l'unità è uguale, sommiamo
-      if (agg[cleanName]!['unit'] == unit) {
-        agg[cleanName]!['qty'] += qty;
-      } else {
-        // Unità diversa? Creiamo una voce separata
-        String newKey = "$cleanName ($unit)";
-        if (!agg.containsKey(newKey)) {
-          agg[newKey] = {'qty': qty, 'unit': unit};
-        } else {
-          agg[newKey]!['qty'] += qty;
-        }
-      }
+    if (agg.containsKey(cleanName) && agg[cleanName]!['unit'] == unit) {
+      agg[cleanName]!['qty'] += qty;
     } else {
-      agg[cleanName] = {'qty': qty, 'unit': unit};
+      if (agg.containsKey(key)) {
+        agg[key]!['qty'] += qty;
+      } else {
+        String finalKey = unit.isEmpty ? cleanName : key;
+        agg[finalKey] = {'qty': qty, 'unit': unit};
+      }
     }
   }
 
-  // --- UI SCHERMATA LISTA ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
-
-      // Tasto Magico Importazione
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showImportDialog,
         backgroundColor: Colors.indigo,
@@ -328,7 +313,6 @@ class _ShoppingListViewState extends State<ShoppingListView> {
           style: TextStyle(color: Colors.white),
         ),
       ),
-
       body: widget.shoppingList.isEmpty
           ? Center(
               child: Column(
@@ -348,23 +332,16 @@ class _ShoppingListViewState extends State<ShoppingListView> {
               ),
             )
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                80,
-              ), // Spazio per il FAB
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
               itemCount: widget.shoppingList.length,
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final item = widget.shoppingList[index];
-
-                // Gestione stato "Fatto" tramite stringa
                 bool isChecked = item.startsWith("OK_");
                 String display = isChecked ? item.substring(3) : item;
 
                 return Dismissible(
-                  key: Key(item + index.toString()), // Key univoca
+                  key: Key(item + index.toString()),
                   background: Container(
                     color: Colors.red,
                     alignment: Alignment.centerRight,
@@ -372,7 +349,6 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                     child: const Icon(Icons.delete, color: Colors.white),
                   ),
                   onDismissed: (_) {
-                    // Rimuovi
                     var list = List<String>.from(widget.shoppingList);
                     list.removeAt(index);
                     widget.onUpdateList(list);
@@ -396,7 +372,6 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                         ),
                       ),
                       onChanged: (val) {
-                        // Toggle stato
                         var list = List<String>.from(widget.shoppingList);
                         if (val == true) {
                           list[index] = "OK_$display";
