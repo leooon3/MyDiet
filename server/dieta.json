@@ -2,1096 +2,2372 @@
   "type": "complex",
   "plan": {
     "Lunedì": {
+      "Generico": [
+        {
+          "name": "Alimento Quantit à CAD",
+          "qty": "N/A",
+          "cad_code": null
+        }
+      ],
       "Colazione": [
         {
-          "name": "Yogurt da latte parz. scremato",
-          "qty": "1 vasetto",
-          "cad_code": "1815"
-        },
-        {
-          "name": "Arance",
-          "qty": "gr 300",
-          "cad_code": "1527"
-        },
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 50",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Marmellata 2 cucchiaino",
+          "name": "Pri ma",
           "qty": "N/A",
-          "cad_code": "1857"
+          "cad_code": null
+        },
+        {
+          "name": "Yogurt da latte parz. scremato 1 vasett o",
+          "qty": "N/A",
+          "cad_code": "1815",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Arance  0",
+          "qty": "N/A",
+          "cad_code": "1527",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Marmellata 2 cucchiain i",
+          "qty": "N/A",
+          "cad_code": "1857",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Noci secche",
-          "qty": "gr 6",
-          "cad_code": "1574"
-        }
-      ],
-      "Seconda Colazione": [
+          "qty": "N/A",
+          "cad_code": "1574",
+          "is_group": true,
+          "ingredients": []
+        },
         {
-          "name": "Mele",
-          "qty": "gr 200",
-          "cad_code": "1546"
+          "name": "Seco nda",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Mele  0",
+          "qty": "N/A",
+          "cad_code": "1546",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Pranzo": [
         {
-          "name": "Pasta con le melanzane",
+          "name": "Pasta con le m elanzane",
           "qty": "N/A",
-          "cad_code": "30"
+          "cad_code": "30",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Pasta di sem ola  0",
+              "qty": "gr 7",
+              "cad_code": "1045"
+            },
+            {
+              "name": "Melanzane  0",
+              "qty": "gr 4",
+              "cad_code": null
+            }
+          ]
         },
         {
-          "name": "Pasta di semola",
-          "qty": "gr 70",
-          "cad_code": "1045"
+          "name": "Tonno al natur ale  0",
+          "qty": "N/A",
+          "cad_code": "1189",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Melanzane",
-          "qty": "gr 40",
-          "cad_code": null
-        },
-        {
-          "name": "Tonno al naturale",
-          "qty": "gr 100",
-          "cad_code": "1189"
-        },
-        {
-          "name": "Pomodori",
-          "qty": "gr 250",
-          "cad_code": "1497"
+          "name": "Pomodori  0",
+          "qty": "N/A",
+          "cad_code": "1497",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Merenda": [
         {
-          "name": "Banane",
-          "qty": "gr 200",
-          "cad_code": "1530"
+          "name": "Banane  0",
+          "qty": "N/A",
+          "cad_code": "1530",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Cena": [
         {
-          "name": "Petto di pollo",
-          "qty": "gr 250",
-          "cad_code": "1081"
-        },
-        {
-          "name": "Cetrioli",
-          "qty": "gr 150",
-          "cad_code": "1471"
-        }
-      ],
-      "Spuntino Serale": [
-        {
-          "name": "Camomilla 1 tazza",
+          "name": "Petto di pollo  0",
           "qty": "N/A",
-          "cad_code": "1945"
+          "cad_code": "1081",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cioccolato fondente",
-          "qty": "gr 10",
-          "cad_code": "1836"
-        }
-      ],
-      "Nell'Arco Della Giornata": [
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 100",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Olio di oliva 10 cucchiaino",
+          "name": "Cetrioli  0",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1471",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Spu ntino serale",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Camomilla 1 tazz a",
+          "qty": "N/A",
+          "cad_code": "1945",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Cioccolato fon dente  0",
+          "qty": "N/A",
+          "cad_code": "1836",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Nell'arc o della giornata",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Olio di oliva 10 cucchiain i",
+          "qty": "N/A",
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Elaborazione a cura di: Centro di Bi ologia Nutrizionale e Funzional e \"Benedetto Panelli\"",
+          "qty": "N/A",
+          "cad_code": null
         }
       ]
     },
     "Martedì": {
+      "Generico": [
+        {
+          "name": "Alimento Quantit à CAD",
+          "qty": "N/A",
+          "cad_code": null
+        }
+      ],
       "Colazione": [
         {
-          "name": "Tisana 1 tazza",
+          "name": "Pri ma",
           "qty": "N/A",
-          "cad_code": "1975"
+          "cad_code": null
         },
         {
-          "name": "Ananas",
-          "qty": "gr 250",
-          "cad_code": "1526"
-        },
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 50",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Bresaola",
-          "qty": "gr 20",
-          "cad_code": "1098"
-        },
-        {
-          "name": "Pomodori",
-          "qty": "gr 50",
-          "cad_code": "1497"
-        },
-        {
-          "name": "Olio di oliva 1 cucchiaino",
+          "name": "Tisana 1 tazz a",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1975",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Ananas  0",
+          "qty": "N/A",
+          "cad_code": "1526",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Bresaola  0",
+          "qty": "N/A",
+          "cad_code": "1098",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Pomodori  0",
+          "qty": "N/A",
+          "cad_code": "1497",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Olio di oliva 1 cucchiain o",
+          "qty": "N/A",
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Noci secche",
-          "qty": "gr 6",
-          "cad_code": "1574"
-        }
-      ],
-      "Seconda Colazione": [
+          "qty": "N/A",
+          "cad_code": "1574",
+          "is_group": true,
+          "ingredients": []
+        },
         {
-          "name": "Mele",
-          "qty": "gr 200",
-          "cad_code": "1546"
+          "name": "Seco nda",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Mele  0",
+          "qty": "N/A",
+          "cad_code": "1546",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Pranzo": [
         {
-          "name": "Pasta con ipis elli",
+          "name": "Pasta con i pis elli",
           "qty": "N/A",
-          "cad_code": "19"
-        },
-        {
-          "name": "Pasta di semola",
-          "qty": "gr 70",
-          "cad_code": "1045"
-        },
-        {
-          "name": "Piselli freschi",
-          "qty": "gr 30",
-          "cad_code": null
+          "cad_code": "19",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Pasta di sem ola  0",
+              "qty": "gr 7",
+              "cad_code": "1045"
+            },
+            {
+              "name": "Piselli freschi  0",
+              "qty": "gr 3",
+              "cad_code": null
+            }
+          ]
         },
         {
           "name": "Uovo di gallina",
-          "qty": "n° 2",
-          "cad_code": "1276"
+          "qty": "N/A",
+          "cad_code": "1276",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cetrioli",
-          "qty": "gr 150",
-          "cad_code": "1471"
+          "name": "Cetrioli  0",
+          "qty": "N/A",
+          "cad_code": "1471",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Merenda": [
         {
-          "name": "Banane",
-          "qty": "gr 200",
-          "cad_code": "1530"
+          "name": "Banane  0",
+          "qty": "N/A",
+          "cad_code": "1530",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Cena": [
         {
-          "name": "Merluzzo onasello",
-          "qty": "gr 350",
-          "cad_code": "1151"
-        },
-        {
-          "name": "Bieta",
-          "qty": "gr 200",
-          "cad_code": "1462"
-        }
-      ],
-      "Spuntino Serale": [
-        {
-          "name": "Camomilla 1 tazza",
+          "name": "Merluzzo o nas ello  0",
           "qty": "N/A",
-          "cad_code": "1945"
+          "cad_code": "1151",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cioccolato fondente",
-          "qty": "gr 10",
-          "cad_code": "1836"
-        }
-      ],
-      "Nell'Arco Della Giornata": [
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 100",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Olio di oliva 10 cucchiaino",
+          "name": "Bieta  0",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1462",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Spu ntino serale",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Camomilla 1 tazz a",
+          "qty": "N/A",
+          "cad_code": "1945",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Cioccolato fon dente  0",
+          "qty": "N/A",
+          "cad_code": "1836",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Nell'arc o della giornata",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Olio di oliva 10 cucchiain i",
+          "qty": "N/A",
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Elaborazione a cura di: Centro di Bi ologia Nutrizionale e Funzionale \"Benedetto Panelli\"",
+          "qty": "N/A",
+          "cad_code": null
         }
       ]
     },
     "Mercoledì": {
+      "Generico": [
+        {
+          "name": "Alimento Quantit à CAD",
+          "qty": "N/A",
+          "cad_code": null
+        }
+      ],
       "Colazione": [
         {
-          "name": "Yogurt da latte parz. scremato",
-          "qty": "1 vasetto",
-          "cad_code": "1815"
-        },
-        {
-          "name": "Arance",
-          "qty": "gr 300",
-          "cad_code": "1527"
-        },
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 50",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Marmellata 2 cucchiaino",
+          "name": "Pri ma",
           "qty": "N/A",
-          "cad_code": "1857"
+          "cad_code": null
+        },
+        {
+          "name": "Yogurt da latte parz. scremato 1 vasett o",
+          "qty": "N/A",
+          "cad_code": "1815",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Arance  0",
+          "qty": "N/A",
+          "cad_code": "1527",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Marmellata 2 cucchiain i",
+          "qty": "N/A",
+          "cad_code": "1857",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Noci secche",
-          "qty": "gr 6",
-          "cad_code": "1574"
-        }
-      ],
-      "Seconda Colazione": [
+          "qty": "N/A",
+          "cad_code": "1574",
+          "is_group": true,
+          "ingredients": []
+        },
         {
-          "name": "Mele",
-          "qty": "gr 200",
-          "cad_code": "1546"
+          "name": "Seco nda",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Mele  0",
+          "qty": "N/A",
+          "cad_code": "1546",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Pranzo": [
         {
-          "name": "Hamburger di manzo",
-          "qty": "gr 200",
-          "cad_code": "1076"
+          "name": "Hamburger di manzo  0",
+          "qty": "N/A",
+          "cad_code": "1076",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cetrioli",
-          "qty": "gr 150",
-          "cad_code": "1471"
+          "name": "Cetrioli  0",
+          "qty": "N/A",
+          "cad_code": "1471",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Merenda": [
         {
-          "name": "Banane",
-          "qty": "gr 200",
-          "cad_code": "1530"
+          "name": "Banane  0",
+          "qty": "N/A",
+          "cad_code": "1530",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Cena": [
         {
           "name": "Riso in brodo vegetale",
           "qty": "N/A",
-          "cad_code": "481"
+          "cad_code": "481",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Riso  0",
+              "qty": "gr 7",
+              "cad_code": "1050"
+            },
+            {
+              "name": "Brodo veget ale  0",
+              "qty": "gr 20",
+              "cad_code": null
+            }
+          ]
         },
         {
-          "name": "Riso",
-          "qty": "gr 70",
-          "cad_code": "1050"
+          "name": "Salmone affum icato  0",
+          "qty": "N/A",
+          "cad_code": "1188",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Brodo vegetale",
-          "qty": "gr 200",
+          "name": "Indivia  0",
+          "qty": "N/A",
+          "cad_code": "1483",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Spu ntino serale",
+          "qty": "N/A",
           "cad_code": null
         },
         {
-          "name": "Salmone affumicato",
-          "qty": "gr 180",
-          "cad_code": "1188"
-        },
-        {
-          "name": "Indivia",
-          "qty": "gr 100",
-          "cad_code": "1483"
-        }
-      ],
-      "Spuntino Serale": [
-        {
-          "name": "Camomilla 1 tazza",
+          "name": "Camomilla 1 tazz a",
           "qty": "N/A",
-          "cad_code": "1945"
+          "cad_code": "1945",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cioccolato fondente",
-          "qty": "gr 10",
-          "cad_code": "1836"
-        }
-      ],
-      "Nell'Arco Della Giornata": [
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 100",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Olio di oliva 5 cucchiaino",
+          "name": "Cioccolato fon dente  0",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1836",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Nell'arc o della giornata",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Olio di oliva 5 cucchiain i",
+          "qty": "N/A",
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Elaborazione a cura di: Centro di Bi ologia Nutrizionale e Funzionale \"Benedetto Panelli\"",
+          "qty": "N/A",
+          "cad_code": null
         }
       ]
     },
     "Giovedì": {
+      "Generico": [
+        {
+          "name": "Alimento Quantit à CAD",
+          "qty": "N/A",
+          "cad_code": null
+        }
+      ],
       "Colazione": [
         {
-          "name": "Tisana 1 tazza",
+          "name": "Pri ma",
           "qty": "N/A",
-          "cad_code": "1975"
+          "cad_code": null
         },
         {
-          "name": "Ananas",
-          "qty": "gr 250",
-          "cad_code": "1526"
-        },
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 50",
-          "cad_code": "1770"
-        },
-        {
-          "name": "parmigiano",
-          "qty": "gr 20",
-          "cad_code": "1238"
-        },
-        {
-          "name": "Pomodori",
-          "qty": "gr 50",
-          "cad_code": "1497"
-        },
-        {
-          "name": "Olio di oliva 1 cucchiaino",
+          "name": "Tisana 1 tazz a",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1975",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Ananas  0",
+          "qty": "N/A",
+          "cad_code": "1526",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Parmigiano  0",
+          "qty": "N/A",
+          "cad_code": "1238",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Pomodori  0",
+          "qty": "N/A",
+          "cad_code": "1497",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Olio di oliva 1 cucchiain o",
+          "qty": "N/A",
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Noci secche",
-          "qty": "gr 6",
-          "cad_code": "1574"
-        }
-      ],
-      "Seconda Colazione": [
+          "qty": "N/A",
+          "cad_code": "1574",
+          "is_group": true,
+          "ingredients": []
+        },
         {
-          "name": "Mele",
-          "qty": "gr 200",
-          "cad_code": "1546"
+          "name": "Seco nda",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Mele  0",
+          "qty": "N/A",
+          "cad_code": "1546",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Pranzo": [
         {
-          "name": "Minestrone co npasta",
+          "name": "Minestrone co n pasta",
           "qty": "N/A",
-          "cad_code": "449"
+          "cad_code": "449",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Pastina  0",
+              "qty": "gr 7",
+              "cad_code": "1048"
+            },
+            {
+              "name": "Verdure mist e  0",
+              "qty": "gr 20",
+              "cad_code": null
+            }
+          ]
         },
         {
-          "name": "Pastina",
-          "qty": "gr 70",
-          "cad_code": "1048"
+          "name": "Prosciutto cott o  0",
+          "qty": "N/A",
+          "cad_code": "1102",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Verdure mista",
-          "qty": "gr 200",
-          "cad_code": null
-        },
-        {
-          "name": "Prosciutto cotto",
-          "qty": "gr 70",
-          "cad_code": "1102"
-        },
-        {
-          "name": "Cicoria",
-          "qty": "gr 200",
-          "cad_code": "1472"
+          "name": "Cicoria  0",
+          "qty": "N/A",
+          "cad_code": "1472",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Merenda": [
         {
-          "name": "Banane",
-          "qty": "gr 200",
-          "cad_code": "1530"
+          "name": "Banane  0",
+          "qty": "N/A",
+          "cad_code": "1530",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Cena": [
         {
-          "name": "Petto di pollo",
-          "qty": "gr 250",
-          "cad_code": "1081"
-        },
-        {
-          "name": "Melanzane",
-          "qty": "gr 200",
-          "cad_code": "1488"
-        }
-      ],
-      "Spuntino Serale": [
-        {
-          "name": "Camomilla 1 tazza",
+          "name": "Petto di pollo  0",
           "qty": "N/A",
-          "cad_code": "1945"
+          "cad_code": "1081",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cioccolato fondente",
-          "qty": "gr 10",
-          "cad_code": "1836"
-        }
-      ],
-      "Nell'Arco Della Giornata": [
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 100",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Olio di oliva 7 cucchiaini e ½",
+          "name": "Melanzane  0",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1488",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Spu ntino serale",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Camomilla 1 tazz a",
+          "qty": "N/A",
+          "cad_code": "1945",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Cioccolato fon dente  0",
+          "qty": "N/A",
+          "cad_code": "1836",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Nell'arc o della giornata",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Olio di oliva 7 cu cchiaini e ½",
+          "qty": "N/A",
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Elaborazione a cura di: Centro di Bi ologia Nutrizionale e Funzionale \"Benedetto Panelli\"",
+          "qty": "N/A",
+          "cad_code": null
         }
       ]
     },
     "Venerdì": {
+      "Generico": [
+        {
+          "name": "Alimento Quantità CAD",
+          "qty": "N/A",
+          "cad_code": null
+        }
+      ],
       "Colazione": [
         {
+          "name": "Pri ma",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
           "name": "Yogurt da latte parz. scremato",
-          "qty": "1 vasetto",
-          "cad_code": "1815"
+          "qty": "N/A",
+          "cad_code": "1815",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Arance",
-          "qty": "gr 300",
-          "cad_code": "1527"
+          "qty": "N/A",
+          "cad_code": "1527",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Pane di grano duro",
-          "qty": "gr 50",
-          "cad_code": "1770"
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Marmellata 2 cucchiaino",
+          "name": "Marmellata 2 cucchiaini",
           "qty": "N/A",
-          "cad_code": "1857"
+          "cad_code": "1857",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Noci secche",
-          "qty": "gr 6",
-          "cad_code": "1574"
-        }
-      ],
-      "Seconda Colazione": [
+          "qty": "N/A",
+          "cad_code": "1574",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Seco nda",
+          "qty": "N/A",
+          "cad_code": null
+        },
         {
           "name": "Mele",
-          "qty": "gr 200",
-          "cad_code": "1546"
+          "qty": "N/A",
+          "cad_code": "1546",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Pranzo": [
         {
           "name": "Platessa",
-          "qty": "gr 350",
-          "cad_code": "1160"
+          "qty": "N/A",
+          "cad_code": "1160",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Fagiolini",
-          "qty": "gr 200",
-          "cad_code": "1477"
+          "qty": "N/A",
+          "cad_code": "1477",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Merenda": [
         {
           "name": "Banane",
-          "qty": "gr 200",
-          "cad_code": "1530"
+          "qty": "N/A",
+          "cad_code": "1530",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Cena": [
         {
-          "name": "Pasta, aglio epeperoncino",
+          "name": "Pasta, aglio e peperoncino",
           "qty": "N/A",
-          "cad_code": "38"
-        },
-        {
-          "name": "Pasta di semola",
-          "qty": "gr 70",
-          "cad_code": "1045"
-        },
-        {
-          "name": "Aglio Q.tà bastante",
-          "qty": "N/A",
-          "cad_code": null
-        },
-        {
-          "name": "Peperoncino Q.tà bastante",
-          "qty": "N/A",
-          "cad_code": null
+          "cad_code": "38",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Pasta di sem ola",
+              "qty": "gr 70",
+              "cad_code": "1045"
+            },
+            {
+              "name": "Aglio Q.tà bastante",
+              "qty": "N/A",
+              "cad_code": null
+            },
+            {
+              "name": "Peperoncino Q.tà bastante",
+              "qty": "N/A",
+              "cad_code": null
+            }
+          ]
         },
         {
           "name": "Uovo di gallina",
-          "qty": "n° 2",
-          "cad_code": "1276"
+          "qty": "N/A",
+          "cad_code": "1276",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200",
-          "cad_code": "1485"
-        }
-      ],
-      "Spuntino Serale": [
+          "qty": "N/A",
+          "cad_code": "1485",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Spu ntino serale",
+          "qty": "N/A",
+          "cad_code": null
+        },
         {
           "name": "Camomilla 1 tazza",
           "qty": "N/A",
-          "cad_code": "1945"
+          "cad_code": "1945",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cioccolato fondente",
-          "qty": "gr 10",
-          "cad_code": "1836"
-        }
-      ],
-      "Nell'Arco Della Giornata": [
+          "name": "Cioccolato fon dente",
+          "qty": "N/A",
+          "cad_code": "1836",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Nell'arc o della giornata",
+          "qty": "N/A",
+          "cad_code": null
+        },
         {
           "name": "Pane di grano duro",
-          "qty": "gr 100",
-          "cad_code": "1770"
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Olio di oliva 10 cucchiaino",
+          "name": "Olio di oliva 10 cucchiaini",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Elaborazione a cura di: Centro di Bi ologia Nutrizionale e Funzional e \"B enedetto Pan elli\"",
+          "qty": "N/A",
+          "cad_code": null
         }
       ]
     },
     "Sabato": {
+      "Generico": [
+        {
+          "name": "Alimento Quantità CAD",
+          "qty": "N/A",
+          "cad_code": null
+        }
+      ],
       "Colazione": [
+        {
+          "name": "Pri ma",
+          "qty": "N/A",
+          "cad_code": null
+        },
         {
           "name": "Tisana 1 tazza",
           "qty": "N/A",
-          "cad_code": "1975"
+          "cad_code": "1975",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Ananas",
-          "qty": "gr 250",
-          "cad_code": "1526"
+          "qty": "N/A",
+          "cad_code": "1526",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Pane di grano duro",
-          "qty": "gr 50",
-          "cad_code": "1770"
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Tonno al naturale",
-          "qty": "gr 25",
-          "cad_code": "1189"
+          "name": "Tonno al natur ale",
+          "qty": "N/A",
+          "cad_code": "1189",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Pomodori",
-          "qty": "gr 50",
-          "cad_code": "1497"
+          "qty": "N/A",
+          "cad_code": "1497",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Olio di oliva 1 cucchiaino",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Noci secche",
-          "qty": "gr 6",
-          "cad_code": "1574"
-        }
-      ],
-      "Seconda Colazione": [
+          "qty": "N/A",
+          "cad_code": "1574",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Seco nda",
+          "qty": "N/A",
+          "cad_code": null
+        },
         {
           "name": "Mele",
-          "qty": "gr 200",
-          "cad_code": "1546"
+          "qty": "N/A",
+          "cad_code": "1546",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Pranzo": [
         {
-          "name": "Pasta con il parmigiano",
+          "name": "Pasta con il pa rmigiano",
           "qty": "N/A",
-          "cad_code": "21"
-        },
-        {
-          "name": "Pasta di semola",
-          "qty": "gr 70",
-          "cad_code": "1045"
-        },
-        {
-          "name": "parmigiano grattugiato",
-          "qty": "gr 10",
-          "cad_code": "1687"
+          "cad_code": "21",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Pasta di sem ola",
+              "qty": "gr 70",
+              "cad_code": "1045"
+            },
+            {
+              "name": "Parmigiano g rattugiato",
+              "qty": "gr 10",
+              "cad_code": "1687"
+            }
+          ]
         },
         {
           "name": "Maiale magro",
-          "qty": "gr 250",
-          "cad_code": "1078"
+          "qty": "N/A",
+          "cad_code": "1078",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Funghi",
-          "qty": "gr 200",
-          "cad_code": "1480"
+          "qty": "N/A",
+          "cad_code": "1480",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Merenda": [
         {
           "name": "Banane",
-          "qty": "gr 200",
-          "cad_code": "1530"
+          "qty": "N/A",
+          "cad_code": "1530",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Cena": [
         {
-          "name": "Insalatona con bresola eparmigi ano",
+          "name": "Insalatona con bresola e parmigi ano",
           "qty": "N/A",
-          "cad_code": "1291"
-        },
-        {
-          "name": "Bresaola",
-          "qty": "gr 50",
-          "cad_code": null
-        },
-        {
-          "name": "Rucola",
-          "qty": "gr 100",
-          "cad_code": null
-        },
-        {
-          "name": "Funghi",
-          "qty": "gr 200",
-          "cad_code": null
-        },
-        {
-          "name": "parmigiano",
-          "qty": "gr 30",
-          "cad_code": null
+          "cad_code": "1291",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Bresaola gr",
+              "qty": "N/A",
+              "cad_code": "50"
+            },
+            {
+              "name": "Rucola gr",
+              "qty": "N/A",
+              "cad_code": "100"
+            },
+            {
+              "name": "Funghi gr",
+              "qty": "N/A",
+              "cad_code": "200"
+            },
+            {
+              "name": "Parmigiano gr",
+              "qty": "N/A",
+              "cad_code": "30"
+            }
+          ]
         },
         {
           "name": "Olive verdi",
-          "qty": "gr 30",
-          "cad_code": "1492"
-        }
-      ],
-      "Spuntino Serale": [
+          "qty": "N/A",
+          "cad_code": "1492",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Spu ntino serale",
+          "qty": "N/A",
+          "cad_code": null
+        },
         {
           "name": "Camomilla 1 tazza",
           "qty": "N/A",
-          "cad_code": "1945"
+          "cad_code": "1945",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cioccolato fondente",
-          "qty": "gr 10",
-          "cad_code": "1836"
-        }
-      ],
-      "Nell'Arco Della Giornata": [
+          "name": "Cioccolato fon dente",
+          "qty": "N/A",
+          "cad_code": "1836",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Nell'arc o della giornata",
+          "qty": "N/A",
+          "cad_code": null
+        },
         {
           "name": "Pane di grano duro",
-          "qty": "gr 100",
-          "cad_code": "1770"
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Olio di oliva 5 cucchiaino",
+          "name": "Olio di oliva 5 cucchiaini",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Elaborazione a cura di: Centro di Bi ologia Nutrizionale e Funzionale \" Benedetto Pan elli\"",
+          "qty": "N/A",
+          "cad_code": null
         }
       ]
     },
     "Domenica": {
+      "Generico": [
+        {
+          "name": "Alimento Quantit à CAD",
+          "qty": "N/A",
+          "cad_code": null
+        }
+      ],
       "Colazione": [
         {
-          "name": "Yogurt da latte parz. scremato",
-          "qty": "1 vasetto",
-          "cad_code": "1815"
-        },
-        {
-          "name": "Arance",
-          "qty": "gr 300",
-          "cad_code": "1527"
-        },
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 50",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Marmellata 2 cucchiaino",
+          "name": "Pri ma",
           "qty": "N/A",
-          "cad_code": "1857"
+          "cad_code": null
+        },
+        {
+          "name": "Yogurt da latte parz. scremato 1 vasett o",
+          "qty": "N/A",
+          "cad_code": "1815",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Arance  0",
+          "qty": "N/A",
+          "cad_code": "1527",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Marmellata 2 cucchiain i",
+          "qty": "N/A",
+          "cad_code": "1857",
+          "is_group": true,
+          "ingredients": []
         },
         {
           "name": "Noci secche",
-          "qty": "gr 6",
-          "cad_code": "1574"
-        }
-      ],
-      "Seconda Colazione": [
+          "qty": "N/A",
+          "cad_code": "1574",
+          "is_group": true,
+          "ingredients": []
+        },
         {
-          "name": "Mele",
-          "qty": "gr 200",
-          "cad_code": "1546"
+          "name": "Seco nda",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Mele  0",
+          "qty": "N/A",
+          "cad_code": "1546",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Pranzo": [
         {
-          "name": "Pasta con ifru tti di mare",
+          "name": "Pasta con i fru tti di mare",
           "qty": "N/A",
-          "cad_code": "16"
+          "cad_code": "16",
+          "is_group": true,
+          "ingredients": [
+            {
+              "name": "Pasta di sem ola  0",
+              "qty": "gr 7",
+              "cad_code": "1045"
+            },
+            {
+              "name": "Frutti di mar e  0",
+              "qty": "gr 3",
+              "cad_code": null
+            }
+          ]
         },
         {
-          "name": "Pasta di semola",
-          "qty": "gr 70",
-          "cad_code": "1045"
+          "name": "Calamari  0",
+          "qty": "N/A",
+          "cad_code": "1139",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Frutti di mare",
-          "qty": "gr 30",
-          "cad_code": null
-        },
-        {
-          "name": "Calamari",
-          "qty": "gr 350",
-          "cad_code": "1139"
-        },
-        {
-          "name": "Cetrioli",
-          "qty": "gr 150",
-          "cad_code": "1471"
+          "name": "Cetrioli  0",
+          "qty": "N/A",
+          "cad_code": "1471",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Merenda": [
         {
-          "name": "Banane",
-          "qty": "gr 200",
-          "cad_code": "1530"
+          "name": "Banane  0",
+          "qty": "N/A",
+          "cad_code": "1530",
+          "is_group": true,
+          "ingredients": []
         }
       ],
       "Cena": [
         {
-          "name": "Hamburger di manzo",
-          "qty": "gr 200",
-          "cad_code": "1076"
-        },
-        {
-          "name": "Insalata mista",
-          "qty": "gr 200",
-          "cad_code": "1485"
-        }
-      ],
-      "Spuntino Serale": [
-        {
-          "name": "Camomilla 1 tazza",
+          "name": "Hamburger di manzo  0",
           "qty": "N/A",
-          "cad_code": "1945"
+          "cad_code": "1076",
+          "is_group": true,
+          "ingredients": []
         },
         {
-          "name": "Cioccolato fondente",
-          "qty": "gr 10",
-          "cad_code": "1836"
-        }
-      ],
-      "Nell'Arco Della Giornata": [
-        {
-          "name": "Pane di grano duro",
-          "qty": "gr 100",
-          "cad_code": "1770"
-        },
-        {
-          "name": "Olio di oliva 7 cucchiaini e ½",
+          "name": "Insalata mista  0",
           "qty": "N/A",
-          "cad_code": "1666"
+          "cad_code": "1485",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Spu ntino serale",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Camomilla 1 tazz a",
+          "qty": "N/A",
+          "cad_code": "1945",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Cioccolato fon dente  0",
+          "qty": "N/A",
+          "cad_code": "1836",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Nell'arc o della giornata",
+          "qty": "N/A",
+          "cad_code": null
+        },
+        {
+          "name": "Pane di grano duro  0",
+          "qty": "N/A",
+          "cad_code": "1770",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Olio di oliva 7 cu cchiaini e ½",
+          "qty": "N/A",
+          "cad_code": "1666",
+          "is_group": true,
+          "ingredients": []
+        },
+        {
+          "name": "Elaborazione a cura di: Centro di Bi ologia Nutrizionale e Funzionale \"Benedetto Panelli\"",
+          "qty": "N/A",
+          "cad_code": null
         }
       ]
     }
   },
   "substitutions": {
     "16": {
-      "info": "PASTA CON I FRUTTI DI MARE: può acquistare cozze, vongole e calamari nelle quantità prescritte, freschi o surgelati, già puliti e pronti per la cottura. Metta i frutti di mare in un tegame con aromi di suo gradimento e dell'acqua tiepida e li faccia cuocere lentamente; può utilizzare parte del condimento assegnato durante la cottura oppure aggiungerlo a crudo. Prepari, infine, la quantità prescritta di pasta e unisca i frutti di mare. Pasta con i frutti di mare Pasta, pomodoro e gamberi Pasta con le seppie Pasta, pomodoro e piselli",
+      "info": "PASTA CON I FRUTTI DI MARE: può acquistare cozze, vongole e calamari nelle quantità prescritte, freschi o surgelati, già puliti e pronti per la cottura. Metta i frutti di mare in un tegame con aromi di suo gradimento e dell'acqua tiepida e li faccia cuocere lentamente; può utilizzare parte del condimento assegnato durante la cottura oppure aggiungerlo a crudo. Prepari, infine, la quantità prescritta di pasta e unisca i frutti di mare. Pasta con i frutti di mare Pasta, pomodoro e gamberi Pasta con le seppie Pasta, pomodoro e piselli Pasta con le vongole Pasta, zucchine e gamberi Pasta con il pomodoro",
       "options": [
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Frutti di mare",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Frutti di mare",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Salsa di pomodoro",
-          "qty": "gr 50"
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
         },
         {
           "name": "Gamberi",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Gamberi",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Seppie",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Seppie",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Salsa di pomodoro",
-          "qty": "gr 50"
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
         },
         {
           "name": "Piselli freschi",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Piselli freschi",
+              "qty": "gr 30"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Vongole",
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Vongole",
+              "qty": "gr 30"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Zucchine",
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 50"
+            }
+          ]
+        },
+        {
+          "name": "Gamberi",
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Gamberi",
+              "qty": "gr 30"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Salsa di pomodoro",
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
         }
       ]
     },
     "19": {
-      "info": "PASTA CON I PISELLI: in commercio può reperire sia i piselli freschi che surgelati, ma eviti di acquistare quelli in scatola. Li passi in padella e li lasci cuocere per circa 20 minuti in acqua, aggiungendo aromi di suo gradimento; può utilizzare parte del condimento assegnato durante la cottura o aggiungerlo a crudo, una volta terminata la preparazione. Cucini la quantità prescritta di pasta e unisca il condimento ormai pronto. Pasta con i piselli Pasta con i funghi Pasta con le melanzane Pasta con gli spinaci Pasta con verdure",
+      "info": "PASTA CON I PISELLI: in commercio può reperire sia i piselli freschi che surgelati, ma eviti di acquistare quelli in scatola. Li passi in padella e li lasci cuocere per circa 20 minuti in acqua, aggiungendo aromi di suo gradimento; può utilizzare parte del condimento assegnato durante la cottura o aggiungerlo a crudo, una volta terminata la preparazione. Cucini la quantità prescritta di pasta e unisca il condimento ormai pronto. Pasta con i piselli Pasta con i funghi Pasta con le melanzane Pasta con gli spinaci Pasta con verdure Pasta con il pomodoro Pasta con le zucchine Pasta, pomodoro e piselli",
       "options": [
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Piselli freschi",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Piselli freschi",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Spinaci",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Spinaci",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Verdure miste",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Salsa di pomodoro",
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Zucchine",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Salsa di pomodoro",
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
         }
       ]
     },
     "21": {
-      "info": "PASTA CON IL PARMIGIANO: prepari la quantità di pasta prescritta e, a cottura ultimata, la scoli, unisca il parmigiano assegnato, mescolando bene il tutto. Pasta con il parmigiano Pasta, zucchine e parmigiano Pasta, spinaci e parmigiano Pasta, funghi e parmigiano Pasta, melanzane e parmigiano",
+      "info": "PASTA CON IL PARMIGIANO: prepari la quantità di pasta prescritta e, a cottura ultimata, la scoli, unisca il parmigiano assegnato, mescolando bene il tutto. Pasta con il parmigiano Pasta, zucchine e parmigiano Pasta, spinaci e parmigiano Pasta, funghi e parmigiano Pasta, melanzane e parmigiano Pasta, pomodoro e parmigiano Pasta, pomodoro, piselli e",
       "options": [
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Parmigiano grattugiato",
-          "qty": "gr 10"
+          "qty": "gr 10",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 10"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Parmigiano grattugiato",
-          "qty": "gr 10"
+          "qty": "gr 10",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 10"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Spinaci",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Spinaci",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Parmigiano grattugiato",
-          "qty": "gr 10"
+          "qty": "gr 10",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 10"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Parmigiano grattugiato",
-          "qty": "gr 10"
+          "qty": "gr 10",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 10"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Melanzane",
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 40"
+            }
+          ]
+        },
+        {
+          "name": "Parmigiano grattugiato",
+          "qty": "gr 10",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 10"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Salsa di pomodoro",
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
+        },
+        {
+          "name": "Parmigiano grattugiato",
+          "qty": "gr 10",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 10"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 60",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 60"
+            }
+          ]
         }
       ]
     },
     "30": {
-      "info": "PASTA CON LE MELANZANE: scelga melanzane sode, lisce e con la buccia integra. Le lavi, le tagli, le lasci riposare per circa un'ora in una terrina con un po' di sale; le melanzane produrranno un liquido scuro che, se scolato, eviterà l'acidità e il gusto amaro tipico di questo ortaggio. Le lavi nuovamente e le passi in padella con parte del condimento assegnato e aromi di suo gradimento. Prepari la quantità di pasta prescritta, aggiunga le melanzane e mescoli il tutto. Pasta con le melanzane Pasta con i funghi Pasta con gli spinaci Pasta con verdure Pasta con i piselli",
+      "info": "PASTA CON LE MELANZANE: scelga melanzane sode, lisce e con la buccia integra. Le lavi, le tagli, le lasci riposare per circa un'ora in una terrina con un po' di sale; le melanzane produrranno un liquido scuro che, se scolato, eviterà l'acidità e il gusto amaro tipico di questo ortaggio. Le lavi nuovamente e le passi in padella con parte del condimento assegnato e aromi di suo gradimento. Prepari la quantità di pasta prescritta, aggiunga le melanzane e mescoli il tutto. Pasta con le melanzane Pasta con i funghi Pasta con gli spinaci Pasta con verdure Pasta con i piselli Pasta con le zucchine Pasta con il pomodoro Pasta, zucchine e gamberi",
       "options": [
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Spinaci",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Spinaci",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Piselli freschi",
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Piselli freschi",
+              "qty": "gr 30"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Zucchine",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Salsa di pomodoro",
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 60",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 60"
+            }
+          ]
+        },
+        {
+          "name": "Zucchine",
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 40"
+            }
+          ]
         }
       ]
     },
     "38": {
-      "info": "PASTA, AGLIO E PEPERONCINO: faccia cuocere la quantità di pasta prescritta e, nel frattempo, faccia appassire uno spicchio d'aglio in padella con parte del condimento assegnato. Aggiunga, quindi, il peperoncino e un cucchiaio dell'acqua di cottura della pasta. Lasci sobbollire ancora per 5 minuti e unisca il tutto alla pasta ormai pronta. Pasta, aglio e peperoncino Pasta con le zucchine Pasta con verdure Pasta con i funghi Pasta con le melanzane",
+      "info": "PASTA, AGLIO E PEPERONCINO: faccia cuocere la quantità di pasta prescritta e, nel frattempo, faccia appassire uno spicchio d'aglio in padella con parte del condimento assegnato. Aggiunga, quindi, il peperoncino e un cucchiaio dell'acqua di cottura della pasta. Lasci sobbollire ancora per 5 minuti e unisca il tutto alla pasta ormai pronta. Pasta, aglio e peperoncino - Aglio Q.tà bastante - Peperoncino Q.tà bastante Pasta con le zucchine Pasta con verdure Pasta con i funghi Pasta con le melanzane Pasta con gli spinaci Pasta con i piselli Pasta con il pomodoro",
       "options": [
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
-        },
-        {
-          "name": "Aglio Q.tà bastante",
-          "qty": "N/A"
-        },
-        {
-          "name": "Peperoncino Q.tà bastante",
-          "qty": "N/A"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Pasta di semola",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Melanzane",
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 40"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Spinaci",
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Spinaci",
+              "qty": "gr 40"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Piselli freschi",
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Piselli freschi",
+              "qty": "gr 30"
+            }
+          ]
+        },
+        {
+          "name": "Pasta di semola",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pasta di semola",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Salsa di pomodoro",
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Salsa di pomodoro",
+              "qty": "gr 50"
+            }
+          ]
         }
       ]
     },
     "449": {
-      "info": "MINESTRONE CON PASTA: scelga verdure e ortaggi tra quelli presenti nel suo piano alimentare, escludendo patate e legumi; se lo desidera, può acquistare il minestrone già pronto, surgelato e confezionato, purché i vegetali utilizzati corrispondano a quelli da me consentiti. Cucini le verdure e gli ortaggi a pezzetti in acqua leggermente salata e, prima che la cottura sia ultimata, aggiunga la quantità di pastina prescritta e, mescolando di tanto in tanto, porti a termine la preparazione. Può utilizzare parte del condimento disponibile per preparare il minestrone o aggiungerlo a crudo. Minestrone con pasta Passato di verdure con pasta Minestrone con patate e Riso in brodo vegetale",
+      "info": "MINESTRONE CON PASTA: scelga verdure e ortaggi tra quelli presenti nel suo piano alimentare, escludendo patate e legumi; se lo desidera, può acquistare il minestrone già pronto, surgelato e confezionato, purché i vegetali utilizzati corrispondano a quelli da me consentiti. Cucini le verdure e gli ortaggi a pezzetti in acqua leggermente salata e, prima che la cottura sia ultimata, aggiunga la quantità di pastina prescritta e, mescolando di tanto in tanto, porti a termine la preparazione. Può utilizzare parte del condimento disponibile per preparare il minestrone o aggiungerlo a crudo. Minestrone con pasta Passato di verdure con pasta Minestrone con patate e Riso in brodo vegetale Minestrone con riso Passato di verdure con riso Pastina in brodo vegetale",
       "options": [
         {
           "name": "Pastina",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pastina",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Pastina",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pastina",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Patate",
-          "qty": "gr 230"
+          "qty": "gr 230",
+          "ingredients": [
+            {
+              "name": "Patate",
+              "qty": "gr 230"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Parmigiano grattugiato",
-          "qty": "gr 20"
+          "qty": "gr 20",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 20"
+            }
+          ]
+        },
+        {
+          "name": "Riso",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Riso",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Brodo vegetale",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Brodo vegetale",
+              "qty": "gr 200"
+            }
+          ]
+        },
+        {
+          "name": "Riso",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Riso",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Verdure miste",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
+        },
+        {
+          "name": "Riso",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Riso",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Verdure miste",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
+        },
+        {
+          "name": "Pastina",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pastina",
+              "qty": "gr 70"
+            }
+          ]
         }
       ]
     },
     "481": {
-      "info": "RISO IN BRODO VEGETALE: tagli le verdure a pezzetti, le metta in abbondante acqua leggermente salata e porti ad ebollizione; continui la cottura a fuoco moderato per circa un'ora e, al termine, filtri il brodo e aggiunga la quantità di riso prescritta. Lo lasci cucinare 15-18 minuti secondo la qualità, mescolando di tanto in tanto. Se lo gradisce, può aggiungere parte del condimento disponibile. Riso in brodo vegetale Minestrone con patate e Minestrone con pasta Passato di verdure con pasta",
+      "info": "RISO IN BRODO VEGETALE: tagli le verdure a pezzetti, le metta in abbondante acqua leggermente salata e porti ad ebollizione; continui la cottura a fuoco moderato per circa un'ora e, al termine, filtri il brodo e aggiunga la quantità di riso prescritta. Lo lasci cucinare 15-18 minuti secondo la qualità, mescolando di tanto in tanto. Se lo gradisce, può aggiungere parte del condimento disponibile. Riso in brodo vegetale Minestrone con patate e Minestrone con pasta Passato di verdure con pasta Pastina in brodo vegetale Minestrone con riso Passato di verdure con riso Minestrone con riso e parmigiano",
       "options": [
         {
           "name": "Riso",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Riso",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Brodo vegetale",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Brodo vegetale",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Patate",
-          "qty": "gr 230"
+          "qty": "gr 230",
+          "ingredients": [
+            {
+              "name": "Patate",
+              "qty": "gr 230"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Parmigiano grattugiato",
-          "qty": "gr 20"
+          "qty": "gr 20",
+          "ingredients": [
+            {
+              "name": "Parmigiano grattugiato",
+              "qty": "gr 20"
+            }
+          ]
         },
         {
           "name": "Pastina",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pastina",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Pastina",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pastina",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Verdure miste",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
+        },
+        {
+          "name": "Pastina",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Pastina",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Brodo vegetale",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Brodo vegetale",
+              "qty": "gr 200"
+            }
+          ]
+        },
+        {
+          "name": "Riso",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Riso",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Verdure miste",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
+        },
+        {
+          "name": "Riso",
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Riso",
+              "qty": "gr 70"
+            }
+          ]
+        },
+        {
+          "name": "Verdure miste",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Verdure miste",
+              "qty": "gr 200"
+            }
+          ]
         }
       ]
     },
@@ -1112,35 +2388,83 @@
       "options": [
         {
           "name": "Hamburger di manzo",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Hamburger di manzo",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Petto di pollo",
-          "qty": "gr 340"
+          "qty": "gr 340",
+          "ingredients": [
+            {
+              "name": "Petto di pollo",
+              "qty": "gr 340"
+            }
+          ]
         },
         {
           "name": "Maiale magro",
-          "qty": "gr 260"
+          "qty": "gr 260",
+          "ingredients": [
+            {
+              "name": "Maiale magro",
+              "qty": "gr 260"
+            }
+          ]
         },
         {
           "name": "Petto di tacchino",
-          "qty": "gr 320"
+          "qty": "gr 320",
+          "ingredients": [
+            {
+              "name": "Petto di tacchino",
+              "qty": "gr 320"
+            }
+          ]
         },
         {
           "name": "Maiale bistecca",
-          "qty": "gr 220"
+          "qty": "gr 220",
+          "ingredients": [
+            {
+              "name": "Maiale bistecca",
+              "qty": "gr 220"
+            }
+          ]
         },
         {
           "name": "Coscia di pollo",
-          "qty": "gr 260"
+          "qty": "gr 260",
+          "ingredients": [
+            {
+              "name": "Coscia di pollo",
+              "qty": "gr 260"
+            }
+          ]
         },
         {
           "name": "Manzo magro",
-          "qty": "gr 290"
+          "qty": "gr 290",
+          "ingredients": [
+            {
+              "name": "Manzo magro",
+              "qty": "gr 290"
+            }
+          ]
         },
         {
           "name": "Agnello",
-          "qty": "gr 280"
+          "qty": "gr 280",
+          "ingredients": [
+            {
+              "name": "Agnello",
+              "qty": "gr 280"
+            }
+          ]
         }
       ]
     },
@@ -1149,35 +2473,83 @@
       "options": [
         {
           "name": "Maiale magro",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Maiale magro",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Petto di tacchino",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Petto di tacchino",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Coscia di pollo",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Coscia di pollo",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Manzo magro",
-          "qty": "gr 270"
+          "qty": "gr 270",
+          "ingredients": [
+            {
+              "name": "Manzo magro",
+              "qty": "gr 270"
+            }
+          ]
         },
         {
           "name": "Hamburger di manzo",
-          "qty": "gr 190"
+          "qty": "gr 190",
+          "ingredients": [
+            {
+              "name": "Hamburger di manzo",
+              "qty": "gr 190"
+            }
+          ]
         },
         {
           "name": "Petto di pollo",
-          "qty": "gr 320"
+          "qty": "gr 320",
+          "ingredients": [
+            {
+              "name": "Petto di pollo",
+              "qty": "gr 320"
+            }
+          ]
         },
         {
           "name": "Agnello",
-          "qty": "gr 260"
+          "qty": "gr 260",
+          "ingredients": [
+            {
+              "name": "Agnello",
+              "qty": "gr 260"
+            }
+          ]
         },
         {
           "name": "Maiale bistecca",
-          "qty": "gr 210"
+          "qty": "gr 210",
+          "ingredients": [
+            {
+              "name": "Maiale bistecca",
+              "qty": "gr 210"
+            }
+          ]
         }
       ]
     },
@@ -1186,35 +2558,83 @@
       "options": [
         {
           "name": "Petto di pollo",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Petto di pollo",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Hamburger di manzo",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Hamburger di manzo",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Maiale magro",
-          "qty": "gr 190"
+          "qty": "gr 190",
+          "ingredients": [
+            {
+              "name": "Maiale magro",
+              "qty": "gr 190"
+            }
+          ]
         },
         {
           "name": "Petto di tacchino",
-          "qty": "gr 230"
+          "qty": "gr 230",
+          "ingredients": [
+            {
+              "name": "Petto di tacchino",
+              "qty": "gr 230"
+            }
+          ]
         },
         {
           "name": "Maiale bistecca",
-          "qty": "gr 160"
+          "qty": "gr 160",
+          "ingredients": [
+            {
+              "name": "Maiale bistecca",
+              "qty": "gr 160"
+            }
+          ]
         },
         {
           "name": "Coscia di pollo",
-          "qty": "gr 190"
+          "qty": "gr 190",
+          "ingredients": [
+            {
+              "name": "Coscia di pollo",
+              "qty": "gr 190"
+            }
+          ]
         },
         {
           "name": "Manzo magro",
-          "qty": "gr 210"
+          "qty": "gr 210",
+          "ingredients": [
+            {
+              "name": "Manzo magro",
+              "qty": "gr 210"
+            }
+          ]
         },
         {
           "name": "Agnello",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Agnello",
+              "qty": "gr 200"
+            }
+          ]
         }
       ]
     },
@@ -1223,11 +2643,23 @@
       "options": [
         {
           "name": "Bresaola",
-          "qty": "gr 20"
+          "qty": "gr 20",
+          "ingredients": [
+            {
+              "name": "Bresaola",
+              "qty": "gr 20"
+            }
+          ]
         },
         {
           "name": "Prosciutto crudo magro",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Prosciutto crudo magro",
+              "qty": "gr 30"
+            }
+          ]
         }
       ]
     },
@@ -1236,15 +2668,33 @@
       "options": [
         {
           "name": "Prosciutto cotto",
-          "qty": "gr 70"
+          "qty": "gr 70",
+          "ingredients": [
+            {
+              "name": "Prosciutto cotto",
+              "qty": "gr 70"
+            }
+          ]
         },
         {
           "name": "Prosciutto crudo",
-          "qty": "gr 50"
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Prosciutto crudo",
+              "qty": "gr 50"
+            }
+          ]
         },
         {
           "name": "Speck",
-          "qty": "gr 50"
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Speck",
+              "qty": "gr 50"
+            }
+          ]
         }
       ]
     },
@@ -1253,35 +2703,83 @@
       "options": [
         {
           "name": "Calamari",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Calamari",
+              "qty": "gr 350"
+            }
+          ]
         },
         {
           "name": "Coda di rospo",
-          "qty": "gr 330"
+          "qty": "gr 330",
+          "ingredients": [
+            {
+              "name": "Coda di rospo",
+              "qty": "gr 330"
+            }
+          ]
         },
         {
           "name": "Seppie",
-          "qty": "gr 330"
+          "qty": "gr 330",
+          "ingredients": [
+            {
+              "name": "Seppie",
+              "qty": "gr 330"
+            }
+          ]
         },
         {
           "name": "Sogliola",
-          "qty": "gr 290"
+          "qty": "gr 290",
+          "ingredients": [
+            {
+              "name": "Sogliola",
+              "qty": "gr 290"
+            }
+          ]
         },
         {
           "name": "Frutti di mare",
-          "qty": "gr 340"
+          "qty": "gr 340",
+          "ingredients": [
+            {
+              "name": "Frutti di mare",
+              "qty": "gr 340"
+            }
+          ]
         },
         {
           "name": "Palombo",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Palombo",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Gamberi",
-          "qty": "gr 280"
+          "qty": "gr 280",
+          "ingredients": [
+            {
+              "name": "Gamberi",
+              "qty": "gr 280"
+            }
+          ]
         },
         {
           "name": "Platessa",
-          "qty": "gr 320"
+          "qty": "gr 320",
+          "ingredients": [
+            {
+              "name": "Platessa",
+              "qty": "gr 320"
+            }
+          ]
         }
       ]
     },
@@ -1290,35 +2788,83 @@
       "options": [
         {
           "name": "Merluzzo o nasello",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Merluzzo o nasello",
+              "qty": "gr 350"
+            }
+          ]
         },
         {
           "name": "Persico",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Persico",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Platessa",
-          "qty": "gr 340"
+          "qty": "gr 340",
+          "ingredients": [
+            {
+              "name": "Platessa",
+              "qty": "gr 340"
+            }
+          ]
         },
         {
           "name": "Gamberi",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Gamberi",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Palombo",
-          "qty": "gr 320"
+          "qty": "gr 320",
+          "ingredients": [
+            {
+              "name": "Palombo",
+              "qty": "gr 320"
+            }
+          ]
         },
         {
           "name": "Sogliola",
-          "qty": "gr 310"
+          "qty": "gr 310",
+          "ingredients": [
+            {
+              "name": "Sogliola",
+              "qty": "gr 310"
+            }
+          ]
         },
         {
           "name": "Seppie",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Seppie",
+              "qty": "gr 350"
+            }
+          ]
         },
         {
           "name": "Coda di rospo",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Coda di rospo",
+              "qty": "gr 350"
+            }
+          ]
         }
       ]
     },
@@ -1327,35 +2873,83 @@
       "options": [
         {
           "name": "Platessa",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Platessa",
+              "qty": "gr 350"
+            }
+          ]
         },
         {
           "name": "Gamberi",
-          "qty": "gr 310"
+          "qty": "gr 310",
+          "ingredients": [
+            {
+              "name": "Gamberi",
+              "qty": "gr 310"
+            }
+          ]
         },
         {
           "name": "Persico",
-          "qty": "gr 320"
+          "qty": "gr 320",
+          "ingredients": [
+            {
+              "name": "Persico",
+              "qty": "gr 320"
+            }
+          ]
         },
         {
           "name": "Merluzzo o nasello",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Merluzzo o nasello",
+              "qty": "gr 350"
+            }
+          ]
         },
         {
           "name": "Palombo",
-          "qty": "gr 330"
+          "qty": "gr 330",
+          "ingredients": [
+            {
+              "name": "Palombo",
+              "qty": "gr 330"
+            }
+          ]
         },
         {
           "name": "Sogliola",
-          "qty": "gr 320"
+          "qty": "gr 320",
+          "ingredients": [
+            {
+              "name": "Sogliola",
+              "qty": "gr 320"
+            }
+          ]
         },
         {
           "name": "Seppie",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Seppie",
+              "qty": "gr 350"
+            }
+          ]
         },
         {
           "name": "Coda di rospo",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Coda di rospo",
+              "qty": "gr 350"
+            }
+          ]
         }
       ]
     },
@@ -1364,11 +2958,23 @@
       "options": [
         {
           "name": "Salmone affumicato",
-          "qty": "gr 180"
+          "qty": "gr 180",
+          "ingredients": [
+            {
+              "name": "Salmone affumicato",
+              "qty": "gr 180"
+            }
+          ]
         },
         {
           "name": "Tonno sott'olio",
-          "qty": "gr 140"
+          "qty": "gr 140",
+          "ingredients": [
+            {
+              "name": "Tonno sott'olio",
+              "qty": "gr 140"
+            }
+          ]
         }
       ]
     },
@@ -1381,31 +2987,73 @@
       "options": [
         {
           "name": "Parmigiano",
-          "qty": "gr 20"
+          "qty": "gr 20",
+          "ingredients": [
+            {
+              "name": "Parmigiano",
+              "qty": "gr 20"
+            }
+          ]
         },
         {
           "name": "Stracchino",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Stracchino",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Crescenza",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Crescenza",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Caciottina",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Caciottina",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Formaggio fresco semimorbido",
-          "qty": "gr 40"
+          "qty": "gr 40",
+          "ingredients": [
+            {
+              "name": "Formaggio fresco semimorbido",
+              "qty": "gr 40"
+            }
+          ]
         },
         {
           "name": "Ricotta di pecora",
-          "qty": "gr 50"
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Ricotta di pecora",
+              "qty": "gr 50"
+            }
+          ]
         },
         {
           "name": "Ricotta di vacca",
-          "qty": "gr 50"
+          "qty": "gr 50",
+          "ingredients": [
+            {
+              "name": "Ricotta di vacca",
+              "qty": "gr 50"
+            }
+          ]
         }
       ]
     },
@@ -1414,19 +3062,43 @@
       "options": [
         {
           "name": "Uovo di gallina n° 2",
-          "qty": "N/A"
+          "qty": "N/A",
+          "ingredients": [
+            {
+              "name": "Uovo di gallina n° 2",
+              "qty": "N/A"
+            }
+          ]
         },
         {
           "name": "Uovo di gallina n° 2",
-          "qty": "N/A"
+          "qty": "N/A",
+          "ingredients": [
+            {
+              "name": "Uovo di gallina n° 2",
+              "qty": "N/A"
+            }
+          ]
         },
         {
           "name": "Uovo di gallina n° 2",
-          "qty": "N/A"
+          "qty": "N/A",
+          "ingredients": [
+            {
+              "name": "Uovo di gallina n° 2",
+              "qty": "N/A"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 100"
+            }
+          ]
         }
       ]
     },
@@ -1439,35 +3111,83 @@
       "options": [
         {
           "name": "Bieta",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Bieta",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Fagiolini",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fagiolini",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Pomodori",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Pomodori",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cetrioli",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Cetrioli",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Peperoni",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Peperoni",
+              "qty": "gr 150"
+            }
+          ]
         }
       ]
     },
@@ -1476,35 +3196,83 @@
       "options": [
         {
           "name": "Cetrioli",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Cetrioli",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cicoria",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Cicoria",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Lattuga",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Lattuga",
+              "qty": "gr 100"
+            }
+          ]
         },
         {
           "name": "Finocchi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Finocchi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Indivia",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Indivia",
+              "qty": "gr 100"
+            }
+          ]
         },
         {
           "name": "Bieta",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Bieta",
+              "qty": "gr 200"
+            }
+          ]
         }
       ]
     },
@@ -1513,35 +3281,83 @@
       "options": [
         {
           "name": "Cicoria",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Cicoria",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Finocchi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Finocchi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cetrioli",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Cetrioli",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Lattuga",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Lattuga",
+              "qty": "gr 100"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Indivia",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Indivia",
+              "qty": "gr 100"
+            }
+          ]
         }
       ]
     },
@@ -1550,35 +3366,83 @@
       "options": [
         {
           "name": "Fagiolini",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fagiolini",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cavolfiori",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Cavolfiori",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Bieta",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Bieta",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Pomodori",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Pomodori",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 250"
+            }
+          ]
         }
       ]
     },
@@ -1587,35 +3451,83 @@
       "options": [
         {
           "name": "Funghi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Fagiolini",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fagiolini",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cavolfiori",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Cavolfiori",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Bieta",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Bieta",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Broccolo a testa",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Broccolo a testa",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Pomodori",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Pomodori",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Peperoni",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Peperoni",
+              "qty": "gr 150"
+            }
+          ]
         }
       ]
     },
@@ -1624,31 +3536,73 @@
       "options": [
         {
           "name": "Indivia",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Indivia",
+              "qty": "gr 100"
+            }
+          ]
         },
         {
           "name": "Lattuga",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Lattuga",
+              "qty": "gr 100"
+            }
+          ]
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cetrioli",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Cetrioli",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Cicoria",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Cicoria",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Finocchi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Finocchi",
+              "qty": "gr 200"
+            }
+          ]
         }
       ]
     },
@@ -1657,35 +3611,83 @@
       "options": [
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Fagiolini",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fagiolini",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Lattuga",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Lattuga",
+              "qty": "gr 100"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Indivia",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Indivia",
+              "qty": "gr 100"
+            }
+          ]
         },
         {
           "name": "Cetrioli",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Cetrioli",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Bieta",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Bieta",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 250"
+            }
+          ]
         }
       ]
     },
@@ -1694,35 +3696,83 @@
       "options": [
         {
           "name": "Melanzane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cavolfiori",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Cavolfiori",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Fagiolini",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fagiolini",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Bieta",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Bieta",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Pomodori",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Pomodori",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Cetrioli",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Cetrioli",
+              "qty": "gr 150"
+            }
+          ]
         }
       ]
     },
@@ -1731,35 +3781,83 @@
       "options": [
         {
           "name": "Olive verdi",
-          "qty": "gr 30"
+          "qty": "gr 30",
+          "ingredients": [
+            {
+              "name": "Olive verdi",
+              "qty": "gr 30"
+            }
+          ]
         },
         {
           "name": "Zucchine",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Zucchine",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Funghi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Funghi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Insalata mista",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Insalata mista",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Fagiolini",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fagiolini",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Melanzane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Melanzane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Cavolfiori",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Cavolfiori",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Bieta",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Bieta",
+              "qty": "gr 200"
+            }
+          ]
         }
       ]
     },
@@ -1772,35 +3870,83 @@
       "options": [
         {
           "name": "Ananas",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Ananas",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Banane",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Banane",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Fichi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fichi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Uva",
-          "qty": "gr 140"
+          "qty": "gr 140",
+          "ingredients": [
+            {
+              "name": "Uva",
+              "qty": "gr 140"
+            }
+          ]
         },
         {
           "name": "Mele",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Mele",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Prugne",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Prugne",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Pere",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Pere",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Pesche",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Pesche",
+              "qty": "gr 350"
+            }
+          ]
         }
       ]
     },
@@ -1809,35 +3955,83 @@
       "options": [
         {
           "name": "Arance",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Arance",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Melone estivo",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Melone estivo",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Ananas",
-          "qty": "gr 280"
+          "qty": "gr 280",
+          "ingredients": [
+            {
+              "name": "Ananas",
+              "qty": "gr 280"
+            }
+          ]
         },
         {
           "name": "Banane",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Banane",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Fichi",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Fichi",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Mele",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Mele",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Prugne",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Prugne",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Pere",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Pere",
+              "qty": "gr 300"
+            }
+          ]
         }
       ]
     },
@@ -1846,23 +4040,53 @@
       "options": [
         {
           "name": "Banane",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Banane",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Fichi",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Fichi",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Uva",
-          "qty": "gr 210"
+          "qty": "gr 210",
+          "ingredients": [
+            {
+              "name": "Uva",
+              "qty": "gr 210"
+            }
+          ]
         },
         {
           "name": "Mele",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Mele",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Kiwi",
-          "qty": "gr 270"
+          "qty": "gr 270",
+          "ingredients": [
+            {
+              "name": "Kiwi",
+              "qty": "gr 270"
+            }
+          ]
         }
       ]
     },
@@ -1871,35 +4095,83 @@
       "options": [
         {
           "name": "Mele",
-          "qty": "gr 200"
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Mele",
+              "qty": "gr 200"
+            }
+          ]
         },
         {
           "name": "Prugne",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Prugne",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Fichi",
-          "qty": "gr 250"
+          "qty": "gr 250",
+          "ingredients": [
+            {
+              "name": "Fichi",
+              "qty": "gr 250"
+            }
+          ]
         },
         {
           "name": "Pere",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Pere",
+              "qty": "gr 300"
+            }
+          ]
         },
         {
           "name": "Pesche",
-          "qty": "gr 350"
+          "qty": "gr 350",
+          "ingredients": [
+            {
+              "name": "Pesche",
+              "qty": "gr 350"
+            }
+          ]
         },
         {
           "name": "Banane",
-          "qty": "gr 150"
+          "qty": "gr 150",
+          "ingredients": [
+            {
+              "name": "Banane",
+              "qty": "gr 150"
+            }
+          ]
         },
         {
           "name": "Ananas",
-          "qty": "gr 280"
+          "qty": "gr 280",
+          "ingredients": [
+            {
+              "name": "Ananas",
+              "qty": "gr 280"
+            }
+          ]
         },
         {
           "name": "Melone estivo",
-          "qty": "gr 300"
+          "qty": "gr 300",
+          "ingredients": [
+            {
+              "name": "Melone estivo",
+              "qty": "gr 300"
+            }
+          ]
         }
       ]
     },
@@ -1924,11 +4196,23 @@
       "options": [
         {
           "name": "Yogurt da latte parz. scremato 1 vasetto",
-          "qty": "N/A"
+          "qty": "N/A",
+          "ingredients": [
+            {
+              "name": "Yogurt da latte parz. scremato 1 vasetto",
+              "qty": "N/A"
+            }
+          ]
         },
         {
           "name": "Latte parz. scremato di vacca",
-          "qty": "gr 100"
+          "qty": "gr 100",
+          "ingredients": [
+            {
+              "name": "Latte parz. scremato di vacca",
+              "qty": "gr 100"
+            }
+          ]
         }
       ]
     },
@@ -1941,12 +4225,34 @@
       "options": []
     },
     "1945": {
-      "info": "CAMOMILLA: scelga il tipo che preferisce tra i vari disponibili in commercio (in fiore, in sacchetti-filtro, solubile); se acquista il tipo in fiore, prepari l'infuso versando in una tazza d'acqua bollente un cucchiaio di fiori secchi e dopo una posa di circa 10 minuti, filtri il tutto e consumi la camomilla al momento. E' un prodotto che si mantiene anche per lunghi periodi di tempo se tenuto in un luogo buio, asciutto e lontano da forti odori; è consigliabile, pertanto, conservarlo in scatole metalliche a chiusura ermetica. Una tazza media di Camomilla equivale a circa gr 200.",
-      "options": []
+      "info": "CAMOMILLA: scelga il tipo che preferisce tra i vari disponibili in commercio (in fiore, in sacchetti-filtro, solubile); se acquista il tipo in fiore, prepari l'infuso versando in una tazza d'acqua bollente un cucchiaio di fiori secchi e dopo una posa di circa 10 minuti, filtri il tutto e consumi la camomilla al momento. E' un prodotto che si mantiene anche per lunghi periodi di tempo se tenuto in un luogo buio, asciutto e lontano da forti odori; è consigliabile, pertanto, conservarlo in scatole metalliche a chiusura ermetica.",
+      "options": [
+        {
+          "name": "Una tazza media di Camomilla equivale a circa .",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Una tazza media di Camomilla equivale a circa .",
+              "qty": "gr 200"
+            }
+          ]
+        }
+      ]
     },
     "1975": {
-      "info": "TISANA: Porti l'acqua in ebollizione, aggiunga le erbe e/o i fiori e lasci in infusione per circa 10 - 15 minuti; successivamente filtri Le consiglio di preparare queste tisane solo al momento del consumo, data la loro facile deperibilità Una tazza media di Tisana equivale a circa gr 200.",
-      "options": []
+      "info": "TISANA: Porti l'acqua in ebollizione, aggiunga le erbe e/o i fiori e lasci in infusione per circa 10 - 15 minuti; successivamente filtri Le consiglio di preparare queste tisane solo al momento del consumo, data la loro facile deperibilità",
+      "options": [
+        {
+          "name": "Una tazza media di Tisana equivale a circa .",
+          "qty": "gr 200",
+          "ingredients": [
+            {
+              "name": "Una tazza media di Tisana equivale a circa .",
+              "qty": "gr 200"
+            }
+          ]
+        }
+      ]
     }
   }
 }

@@ -5,8 +5,7 @@ class MealCard extends StatelessWidget {
   final String mealName;
   final List<dynamic> foods;
   final Map<String, ActiveSwap> activeSwaps;
-  final Function(String key, int currentCad)
-  onSwap; // Passiamo il CAD per sapere cosa cercare
+  final Function(String key, int currentCad) onSwap;
 
   const MealCard({
     super.key,
@@ -18,30 +17,45 @@ class MealCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. RAGGRUPPA I CIBI PER CAD
-    // Struttura: Map<int_CAD, List<Food>>
-    // Usiamo una lista di liste per mantenere l'ordine
+    // 1. RAGGRUPPA I CIBI
+    // Nuova Logica: Se un elemento ha quantità "N/A", è un'intestazione di un piatto composto.
+    // Raggruppiamo gli elementi successivi sotto di esso finché non ne troviamo un altro con "N/A" o un piatto distinto.
     List<List<dynamic>> groupedFoods = [];
 
     if (foods.isNotEmpty) {
-      List<dynamic> currentGroup = [foods[0]];
-      for (int i = 1; i < foods.length; i++) {
-        var prev = foods[i - 1];
-        var curr = foods[i];
+      List<dynamic> currentGroup = [];
 
-        // Logica di raggruppamento: Se hanno lo stesso 'cad' (e non è nullo/zero) vanno insieme.
-        // Se nel tuo JSON il campo si chiama 'cad_code' o altro, correggi qui.
-        int prevCad = int.tryParse(prev['cad'].toString()) ?? 0;
-        int currCad = int.tryParse(curr['cad'].toString()) ?? 0;
+      for (var food in foods) {
+        // Corretto l'errore: si usa 'cad_code' invece di 'cad'
+        String qty = food['qty']?.toString() ?? "";
+        bool isHeader =
+            qty == "N/A"; // I piatti principali hanno qty N/A nel tuo JSON
 
-        if (prevCad != 0 && prevCad == currCad) {
-          currentGroup.add(curr);
+        if (isHeader) {
+          // Se inizia un nuovo piatto composto e c'era già un gruppo aperto, chiudilo.
+          if (currentGroup.isNotEmpty) {
+            groupedFoods.add(currentGroup);
+          }
+          // Inizia nuovo gruppo con questo header
+          currentGroup = [food];
         } else {
-          groupedFoods.add(currentGroup);
-          currentGroup = [curr];
+          // Se è un ingrediente
+          if (currentGroup.isEmpty) {
+            // Caso raro: ingrediente senza header prima (es. Colazione semplice)
+            // Lo trattiamo come gruppo a sé stante o lo accodiamo se preferisci raggruppare tutto
+            // Per sicurezza creiamo un nuovo gruppo per non mischiarlo erroneamente
+            groupedFoods.add([food]);
+            currentGroup = []; // Reset
+          } else {
+            // Aggiunge al gruppo corrente (es. Pasta di semola sotto Pasta con melanzane)
+            currentGroup.add(food);
+          }
         }
       }
-      groupedFoods.add(currentGroup);
+      // Aggiungi l'ultimo gruppo rimasto aperto
+      if (currentGroup.isNotEmpty) {
+        groupedFoods.add(currentGroup);
+      }
     }
 
     return Card(
@@ -52,29 +66,32 @@ class MealCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              mealName, // Es. "Pranzo"
+              mealName,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
 
-            // Generiamo i widget per i GRUPPI
             ...groupedFoods.asMap().entries.map((entry) {
               int groupIndex = entry.key;
               List<dynamic> group = entry.value;
 
-              // Chiave univoca per il gruppo (usiamo l'indice del primo elemento nel pasto originale)
-              // Nota: per renderlo univoco usiamo un identificativo basato sulla posizione
-              String swapKey = "${mealName}_group_$groupIndex";
+              // Recuperiamo il primo elemento (Header) per determinare il CAD
+              var headerFood = group.isNotEmpty ? group[0] : null;
 
-              // Verifica se c'è uno swap attivo per questo gruppo
+              // ERRORE TROVATO: Qui usavi 'cad' invece di 'cad_code'
+              int originalCad = 0;
+              if (headerFood != null && headerFood['cad_code'] != null) {
+                originalCad =
+                    int.tryParse(headerFood['cad_code'].toString()) ?? 0;
+              }
+
+              String swapKey = "${mealName}_group_$groupIndex";
               bool isSwapped = activeSwaps.containsKey(swapKey);
+
+              // Se sostituito mostra i nuovi ingredienti, altrimenti il gruppo originale
               List<dynamic> displayFoods = isSwapped
                   ? activeSwaps[swapKey]!.swappedIngredients ?? group
                   : group;
-
-              // Titolo del piatto (prendiamo il nome del primo elemento o un nome generico)
-              // Se è un gruppo sostituito, il nome potrebbe venire dallo swap se lo avessimo salvato,
-              // altrimenti mostriamo gli ingredienti.
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,13 +99,19 @@ class MealCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Se è un gruppo singolo, mostriamo nome classico
-                      // Se è un gruppo multiplo, mostriamo l'elenco puntato
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: displayFoods.map((f) {
-                            bool isMultiple = displayFoods.length > 1;
+                            // Logica pallini: Se è il primo del gruppo ed è un header originale, lo mostriamo in grassetto
+                            // Gli altri li mostriamo con il pallino se siamo in un gruppo > 1 elemento
+                            bool isHeaderLine =
+                                (group.indexOf(f) == 0 &&
+                                !isSwapped &&
+                                f['qty'] == 'N/A');
+                            bool showBullet =
+                                displayFoods.length > 1 && !isHeaderLine;
+
                             return Padding(
                               padding: const EdgeInsets.symmetric(
                                 vertical: 2.0,
@@ -96,7 +119,7 @@ class MealCard extends StatelessWidget {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (isMultiple)
+                                  if (showBullet)
                                     const Padding(
                                       padding: EdgeInsets.only(
                                         top: 6,
@@ -107,15 +130,18 @@ class MealCard extends StatelessWidget {
                                         size: 6,
                                         color: Colors.green,
                                       ),
-                                    ), // I pallini richiesti
+                                    ),
                                   Expanded(
                                     child: Text(
-                                      "${f['name']} (${f['qty']})",
+                                      // Se qty è N/A non lo mostriamo o mostriamo solo il nome
+                                      (f['qty'] == "N/A")
+                                          ? f['name']
+                                          : "${f['name']} (${f['qty']})",
                                       style: TextStyle(
                                         fontSize: 16,
-                                        fontWeight: isMultiple
-                                            ? FontWeight.normal
-                                            : FontWeight.w500,
+                                        fontWeight: isHeaderLine || isSwapped
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
                                         color: isSwapped
                                             ? Colors.blue[800]
                                             : Colors.black,
@@ -129,19 +155,15 @@ class MealCard extends StatelessWidget {
                         ),
                       ),
 
-                      // Tasto Swap unico per il gruppo
-                      IconButton(
-                        icon: Icon(
-                          Icons.swap_horiz,
-                          color: isSwapped ? Colors.blue : Colors.grey,
+                      // Mostra il tasto swap solo se il "capogruppo" ha un CAD valido (diverso da 0)
+                      if (originalCad != 0)
+                        IconButton(
+                          icon: Icon(
+                            Icons.swap_horiz,
+                            color: isSwapped ? Colors.blue : Colors.grey,
+                          ),
+                          onPressed: () => onSwap(swapKey, originalCad),
                         ),
-                        onPressed: () {
-                          // Passiamo il CAD del primo elemento originale per cercare alternative valide
-                          int originalCad =
-                              int.tryParse(group[0]['cad'].toString()) ?? 0;
-                          onSwap(swapKey, originalCad);
-                        },
-                      ),
                     ],
                   ),
                   const Divider(height: 8),
