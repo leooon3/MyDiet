@@ -4,58 +4,78 @@ import os
 import json
 import pdfplumber
 
-# --- SCHEMA ---
+# --- SCHEMI DATI PER GEMINI (Input/Output Strutturato) ---
+
+# 1. Schema per gli ingredienti dei piatti composti
 class Ingrediente(typing.TypedDict):
     nome: str
     quantita: str
 
+# 2. Schema per il Piatto (Singolo o Composto)
 class Piatto(typing.TypedDict):
     nome_piatto: str
-    tipo: str  
-    quantita_totale: str 
-    ingredienti: list[Ingrediente]
+    tipo: str  # "composto" o "singolo"
+    cad_code: int # IL CODICE CAD per le sostituzioni (es. 1045)
+    quantita_totale: str # Solo se è singolo
+    ingredienti: list[Ingrediente] # Solo se è composto
 
+# 3. Schema per il Pasto (Colazione, Pranzo, etc.)
 class Pasto(typing.TypedDict):
-    tipo_pasto: str 
+    tipo_pasto: str # Es: "Colazione", "Spuntino", "Pranzo", "Cena"
     elenco_piatti: list[Piatto]
 
+# 4. Schema per il Giorno
 class GiornoDieta(typing.TypedDict):
     giorno: str 
     pasti: list[Pasto]
 
+# --- SCHEMA PER LE TABELLE DI SOSTITUZIONE (CAD) ---
+class OpzioneSostituzione(typing.TypedDict):
+    nome: str
+    quantita: str
+
+class GruppoSostituzione(typing.TypedDict):
+    cad_code: int # Es. 19
+    titolo: str # Es. "PASTA CON I PISELLI"
+    opzioni: list[OpzioneSostituzione]
+
+# --- OUTPUT FINALE COMPLETO ---
+class OutputDietaCompleto(typing.TypedDict):
+    piano_settimanale: list[GiornoDieta]
+    tabella_sostituzioni: list[GruppoSostituzione]
+
 class DietParser:
     def __init__(self):
-        # 1. Configurazione API Key
+        # Configurazione API Key robusta
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
-            print("❌ ERRORE CRITICO: GOOGLE_API_KEY non trovata nelle env vars!")
+            print("❌ ERRORE CRITICO: GOOGLE_API_KEY non trovata!")
         else:
-            # Pulizia preventiva: rimuove spazi o virgolette accidentali
             clean_key = api_key.strip().replace('"', '').replace("'", "")
             genai.configure(api_key=clean_key)
-            print(f"🔑 API Key configurata (prime 5 cifre): {clean_key[:5]}...")
 
         self.system_instruction = """
-        Sei un nutrizionista. Estrai la dieta in JSON rigoroso.
-        Regole:
-        1. Piatto senza quantità = Titolo Composto.
-        2. Righe sotto con pallino (•) = Ingredienti.
-        3. Alimento con quantità = Piatto Singolo.
-        """
+        Sei un nutrizionista esperto. Il tuo compito è analizzare il documento PDF della dieta ed estrarre le informazioni in un JSON strutturato.
+        
+        DEVI ESTRARRE DUE SEZIONI PRINCIPALI:
 
-    def _debug_list_available_models(self):
-        """Chiede a Google quali modelli sono disponibili per questa chiave"""
-        print("🔍 DIAGNOSTICA: Richiedo lista modelli a Google...")
-        try:
-            available = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    available.append(m.name)
-            print(f"✅ Modelli Trovati: {available}")
-            return available
-        except Exception as e:
-            print(f"❌ DIAGNOSTICA FALLITA: La chiave API sembra non funzionare. Errore: {e}")
-            return []
+        1. **IL PIANO SETTIMANALE**:
+           - Analizza giorno per giorno (Lunedì, Martedì...).
+           - Estrai TUTTI i pasti presenti: "Prima colazione", "Seconda colazione", "Pranzo", "Merenda", "Cena", "Spuntino serale" , "Nell'Arco della giornata".
+           - **Codici CAD**: Se accanto a un piatto c'è scritto "CAD" seguito da un numero (es. "Pane... CAD 1770"), estrai quel numero nel campo 'cad_code'.
+           - **Tipologia Piatto**:
+             - "composto": Se è un titolo di ricetta senza quantità (es. "Pasta e fagioli") seguito da ingredienti con pallino (•).
+             - "singolo": Se è un alimento con la sua quantità sulla stessa riga (es. "Mela 200gr").
+
+        2. **LE TABELLE DI SOSTITUZIONE (CAD)**:
+           - Scorri fino alla fine del documento dove ci sono le schede numerate "CAD: [Numero]".
+           - Per ogni CAD, crea un oggetto 'GruppoSostituzione'.
+           - 'cad_code': Il numero del CAD.
+           - 'titolo': Il nome del gruppo (es. "PASTA CON I PISELLI").
+           - 'opzioni': La lista degli alimenti alternativi elencati nella tabella sotto il titolo. Prendi solo Nome e Quantità.
+
+        Restituisci un unico JSON completo rispettando lo schema 'OutputDietaCompleto'.
+        """
 
     def _extract_text_from_pdf(self, pdf_path: str) -> str:
         text = ""
@@ -67,65 +87,48 @@ class DietParser:
                         text += extracted + "\n"
         except Exception as e:
             print(f"❌ Errore lettura PDF: {e}")
-            raise e 
+            raise e
         return text
 
     def parse_complex_diet(self, file_path: str):
-        # 1. Diagnostica preliminare
-        available_models = self._debug_list_available_models()
-        
-        # 2. Estrazione Testo
         diet_text = self._extract_text_from_pdf(file_path)
         if not diet_text:
-            raise ValueError("Il PDF sembra vuoto o non leggibile.")
+            raise ValueError("PDF vuoto o illeggibile.")
 
-        # 3. Selezione intelligente del modello
-        # Cerchiamo un modello valido tra quelli disponibili
-        chosen_model = None
+        # Usiamo il modello Pro che ha una finestra di contesto più ampia per leggere tutto il file
+        model_name = "gemini-1.5-pro"
         
-        # Priorità
-        preferences = ["models/gemini-1.5-flash", "models/gemini-1.5-pro", "models/gemini-pro"]
-        
-        # Cerca il primo match tra preferenze e disponibili
-        for pref in preferences:
-            if pref in available_models:
-                chosen_model = pref
-                break
-        
-        # Fallback: se non trovo le preferenze, uso il primo disponibile che sia "gemini"
-        if not chosen_model:
-            for m in available_models:
-                if "gemini" in m:
-                    chosen_model = m
-                    break
-        
-        if not chosen_model:
-            # Se la lista era vuota o nessun modello gemini trovato
-            # Provo comunque con il nome standard sperando funzioni
-            print("⚠️ Nessun modello trovato in lista, provo blind attempt con 'gemini-1.5-flash'")
-            chosen_model = "gemini-1.5-flash"
-        else:
-            print(f"🎯 Modello selezionato: {chosen_model}")
-
-        # 4. Generazione
         try:
-            # Rimuoviamo il prefisso 'models/' se presente per l'instanziazione
-            model_name_clean = chosen_model.replace("models/", "")
-            
+            print(f"🤖 Richiesta a Gemini ({model_name}) per analisi completa...")
             model = genai.GenerativeModel(
-                model_name=model_name_clean,
+                model_name=model_name,
                 system_instruction=self.system_instruction,
                 generation_config={
                     "response_mime_type": "application/json",
-                    "response_schema": list[GiornoDieta]
+                    "response_schema": OutputDietaCompleto
                 }
             )
 
-            prompt = f"Analizza questa dieta:\n{diet_text}"
+            prompt = f"Analizza questa dieta completa (Piano Settimanale + Tabelle CAD):\n{diet_text}"
 
             response = model.generate_content(prompt)
             return json.loads(response.text)
 
         except Exception as e:
-            print(f"❌ Errore FATALE con modello {chosen_model}: {e}")
-            raise e
+            print(f"⚠️ Errore con {model_name}: {e}")
+            # Tentativo di fallback con Flash se Pro fallisce o non è disponibile
+            try:
+                print("🔄 Provo fallback con gemini-1.5-flash...")
+                model = genai.GenerativeModel(
+                    model_name="gemini-1.5-flash",
+                    system_instruction=self.system_instruction,
+                    generation_config={
+                        "response_mime_type": "application/json",
+                        "response_schema": OutputDietaCompleto
+                    }
+                )
+                response = model.generate_content(prompt)
+                return json.loads(response.text)
+            except Exception as e2:
+                print(f"❌ Fallito anche il fallback: {e2}")
+                raise e2

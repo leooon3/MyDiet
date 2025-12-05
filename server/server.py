@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import shutil
 import os
 import json
@@ -15,97 +15,119 @@ DIET_PDF_PATH = "temp_dieta.pdf"
 RECEIPT_PATH = "temp_scontrino"
 DIET_JSON_PATH = "dieta.json"
 
-def convert_to_app_format(gemini_data):
+def convert_to_app_format(gemini_output):
     """
-    Traduce l'output di Gemini (Lista di Giorni) nel formato Mappa 
-    che l'App Flutter si aspetta:
-    Input: [ {"giorno": "Lunedì", "pasti": [...]}, ... ]
-    Output: { "Lunedì": { "Pranzo": [ {"name": "Pasta", "qty": "100g"}, ... ] }, ... }
+    Converte l'output di Gemini (Piano + Sostituzioni) nel formato per l'App.
+    Output strutturato per MealCard.dart:
+    - Piatto Composto: qty="N/A", cad_code=123
+    - Ingredienti: qty="70g"
     """
-    app_data = {}
-    
-    # Se gemini_data è vuoto o None, restituiamo dict vuoto
-    if not gemini_data:
-        return {}
+    app_plan = {}
+    app_substitutions = {}
 
-    for giorno in gemini_data:
-        # Prende il nome del giorno (es. "Lunedì")
-        day_name = giorno.get('giorno', 'Sconosciuto').strip()
+    # 1. ELABORAZIONE PIANO SETTIMANALE
+    raw_plan = gemini_output.get('piano_settimanale', [])
+    
+    for giorno in raw_plan:
+        day_name = giorno.get('giorno', 'Sconosciuto').strip().capitalize()
         
-        # Inizializza la mappa per quel giorno
-        app_data[day_name] = {}
-        
-        # Itera sui pasti (Colazione, Pranzo, etc.)
+        # Mappatura di sicurezza giorni
+        day_lower = day_name.lower()
+        if "lun" in day_lower: day_name = "Lunedì"
+        elif "mar" in day_lower: day_name = "Martedì"
+        elif "mer" in day_lower: day_name = "Mercoledì"
+        elif "gio" in day_lower: day_name = "Giovedì"
+        elif "ven" in day_lower: day_name = "Venerdì"
+        elif "sab" in day_lower: day_name = "Sabato"
+        elif "dom" in day_lower: day_name = "Domenica"
+
+        app_plan[day_name] = {}
+
         for pasto in giorno.get('pasti', []):
-            meal_name = pasto.get('tipo_pasto', 'Altro')
+            meal_name = pasto.get('tipo_pasto', 'Altro').strip()
             items = []
             
-            # Itera sui piatti di quel pasto
             for piatto in pasto.get('elenco_piatti', []):
+                # Importante: Gemini restituisce 'cad_code' (int), noi lo passiamo
+                cad_code = piatto.get('cad_code', 0)
                 
-                # Caso 1: Piatto Composto (es. Pasta al sugo)
                 if piatto.get('tipo') == 'composto':
-                    # 1. Aggiunge il TITOLO del piatto (senza quantità)
+                    # Titolo del Piatto (Header)
                     items.append({
                         "name": piatto['nome_piatto'],
-                        "qty": "" 
+                        "qty": "N/A", # <--- FONDAMENTALE per MealCard
+                        "cad_code": cad_code
                     })
-                    # 2. Aggiunge gli INGREDIENTI sotto come voci elenco puntato
+                    # Ingredienti
                     for ing in piatto.get('ingredienti', []):
                         items.append({
-                            "name": f"• {ing['nome']}",
-                            "qty": ing['quantita']
+                            "name": ing['nome'], # Rimuovo il pallino qui, lo mette la UI se vuole
+                            "qty": ing['quantita'],
+                            "is_ingredient": True
                         })
-                
-                # Caso 2: Alimento Singolo (es. Mela)
                 else:
+                    # Piatto Singolo
                     items.append({
                         "name": piatto['nome_piatto'],
-                        "qty": piatto.get('quantita_totale', '')
+                        "qty": piatto.get('quantita_totale', ''),
+                        "cad_code": cad_code
                     })
             
-            # Assegna la lista di cibi a quel pasto
-            app_data[day_name][meal_name] = items
-            
-    return app_data
+            app_plan[day_name][meal_name] = items
+
+    # 2. ELABORAZIONE TABELLA SOSTITUZIONI
+    raw_subs = gemini_output.get('tabella_sostituzioni', [])
+    for group in raw_subs:
+        cad_key = str(group.get('cad_code', '0'))
+        
+        options = []
+        for opt in group.get('opzioni', []):
+            options.append({
+                "name": opt['nome'],
+                "qty": opt['quantita']
+            })
+
+        app_substitutions[cad_key] = {
+            "name": group.get('titolo', "Alternativa"),
+            "options": options
+        }
+
+    return {
+        "plan": app_plan,
+        "substitutions": app_substitutions
+    }
 
 @app.get("/")
 def read_root():
-    return {"status": "Server Attivo e Pronto per l'App! 🚀", "message": "Usa /upload-diet"}
+    return {"status": "Server Attivo", "actions": ["/upload-diet", "/debug/json"]}
+
+@app.get("/debug/json")
+def get_debug_json():
+    if os.path.exists(DIET_JSON_PATH):
+        return FileResponse(DIET_JSON_PATH, media_type='application/json', filename="dieta_debug.json")
+    return {"error": "Nessun file presente"}
 
 @app.post("/upload-diet")
 async def upload_diet(file: UploadFile = File(...)):
     try:
-        print(f"📥 Ricevuto file dieta: {file.filename}")
-        
+        print(f"📥 Ricevuto PDF: {file.filename}")
         with open(DIET_PDF_PATH, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 1. Inizializza Parser
-        parser = DietParser() 
-        
-        # 2. Ottieni i dati grezzi da Gemini (che è una LISTA)
+        parser = DietParser()
+        print("🤖 Avvio analisi Gemini...")
         raw_data = parser.parse_complex_diet(DIET_PDF_PATH)
         
-        # 3. Converti nel formato Mappa per l'App
         final_data = convert_to_app_format(raw_data)
         
-        # 4. Salva su disco (per debug)
         with open(DIET_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(final_data, f, indent=2, ensure_ascii=False)
             
-        print("✅ Dieta convertita correttamente nel formato App.")
-        
-        # 5. Restituisci l'oggetto JSON con la chiave "plan"
-        # Questo risolve l'errore List vs Map
-        return JSONResponse(content={
-            "plan": final_data,
-            "substitutions": {} 
-        })
+        print("✅ Analisi completata. JSON salvato.")
+        return JSONResponse(content=final_data)
 
     except Exception as e:
-        print(f"❌ Errore durante l'elaborazione: {e}")
-        # Stampiamo l'errore nei log per capire meglio
+        print(f"❌ Errore: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -126,7 +148,6 @@ async def scan_receipt(file: UploadFile = File(...)):
         scanner = ReceiptScanner(DIET_JSON_PATH)
         found_items = scanner.scan_receipt(temp_filename)
         
-        print(f"✅ Scontrino analizzato: trovati {len(found_items)} prodotti.")
         return JSONResponse(content=found_items)
 
     except Exception as e:
@@ -135,5 +156,4 @@ async def scan_receipt(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    print("🌐 Avvio server su http://0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
