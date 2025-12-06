@@ -7,7 +7,7 @@ import 'screens/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env"); // Load Env
+  await dotenv.load(fileName: ".env");
 
   runApp(
     MultiProvider(
@@ -34,7 +34,6 @@ class DietApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
-        // ... rest of theme ...
       ),
       home: const MainScreen(),
     );
