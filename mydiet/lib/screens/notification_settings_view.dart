@@ -44,27 +44,41 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
   }
 
   Future<void> _toggleMeal(int id, bool value) async {
-    // Se l'utente sta cercando di ATTIVARE (value == true)
+    // Se l'utente sta cercando di ATTIVARE
     if (value) {
+      // 1. Controllo permessi base (Notifiche)
       bool hasPermission = await NotificationService()
           .checkAndRequestPermissions();
-
       if (!hasPermission) {
-        // Se non abbiamo il permesso, mostriamo il pop-up e FERMIAMO TUTTO.
-        if (mounted) {
-          _showPermissionDialog();
-        }
-        return; // <--- Importante: usciamo dalla funzione, lo switch resta spento.
+        if (mounted) _showPermissionDialog();
+        return; // STOP! Non attivare lo switch graficamente
       }
-      if (await Permission.scheduleExactAlarm.isDenied) {
-        // Questo apre direttamente le impostazioni speciali di Android
+
+      // 2. Controllo specifico per le SVEGLIE ESATTE (Android 12+)
+      var exactStatus = await Permission.scheduleExactAlarm.status;
+      if (exactStatus.isDenied) {
+        // Apre le impostazioni di sistema
         await Permission.scheduleExactAlarm.request();
-        // Opzionale: potresti voler fare un return qui se vuoi costringere l'utente ad attivarlo subito,
-        // ma spesso conviene lasciar proseguire e sperare che l'utente lo attivi.
+
+        // STOP! È fondamentale uscire qui.
+        // L'utente deve andare nelle impostazioni, attivare la spunta, tornare indietro
+        // e ri-cliccare lo switch nell'app. Non possiamo programmare ora.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Abilita 'Sveglie e promemoria' nelle impostazioni e riprova.",
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
       }
     }
 
-    // Se arriviamo qui, o stiamo spegnendo, o abbiamo il permesso.
+    // Se arriviamo qui, abbiamo TUTTI i permessi. Possiamo salvare e programmare.
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _enabled[id] = value;

@@ -1,2 +1,5 @@
 -keep class com.dexterous.flutterlocalnotifications.** { *; }
 -keep class com.google.gson.** { *; }
+-keep class androidx.window.** { *; }
+-keep class org.threeten.bp.** { *; }
+-keep class com.timezone.** { *; }

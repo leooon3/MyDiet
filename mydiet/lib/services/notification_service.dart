@@ -21,7 +21,7 @@ class NotificationService {
     // ANDROID: Usa l'icona di launcher standard che è sicuramente valida
     // Invece di 'icon', usa '@mipmap/ic_launcher' per sicurezza
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
 
     // IOS: Configurazione esplicita per il FOREGROUND
     const DarwinInitializationSettings initializationSettingsDarwin =
