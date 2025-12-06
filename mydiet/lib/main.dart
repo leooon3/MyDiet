@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:mydiet/services/notification_service.dart';
 import 'screens/home_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inizializza subito il servizio notifiche
-  await NotificationService().init();
+  // Non usiamo await qui per non bloccare lo splash screen.
+  // L'init è gestito internamente in modo sicuro o può essere chiamato nella HomeScreen.
+  NotificationService().init();
 
   runApp(const DietApp());
 }

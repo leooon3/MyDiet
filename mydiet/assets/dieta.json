@@ -1,0 +1,49 @@
+{
+  "plan": {
+    "Lunedì": {
+      "Colazione": [
+        {
+          "name": "Latte parzialmente scremato",
+          "qty": "200ml",
+          "cad_code": 0
+        },
+        { "name": "Fette biscottate integrali", "qty": "30g", "cad_code": 0 }
+      ],
+      "Pranzo": [
+        { "name": "Riso integrale", "qty": "80g", "cad_code": 1 },
+        { "name": "Petto di pollo", "qty": "150g", "cad_code": 2 },
+        { "name": "Zucchine", "qty": "200g", "cad_code": 0 }
+      ],
+      "Cena": [
+        { "name": "Salmone", "qty": "150g", "cad_code": 3 },
+        { "name": "Insalata mista", "qty": "N/A", "cad_code": 0 }
+      ]
+    },
+    "Martedì": {
+      "Colazione": [{ "name": "Yogurt Greco", "qty": "150g", "cad_code": 0 }]
+    }
+  },
+  "substitutions": {
+    "1": {
+      "name": "Riso",
+      "options": [
+        { "name": "Pasta integrale", "qty": "80g" },
+        { "name": "Farro", "qty": "80g" }
+      ]
+    },
+    "2": {
+      "name": "Pollo",
+      "options": [
+        { "name": "Tacchino", "qty": "150g" },
+        { "name": "Manzo magro", "qty": "120g" }
+      ]
+    },
+    "3": {
+      "name": "Pesce Grasso",
+      "options": [
+        { "name": "Tonno fresco", "qty": "150g" },
+        { "name": "Sgombro", "qty": "150g" }
+      ]
+    }
+  }
+}

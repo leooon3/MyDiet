@@ -105,13 +105,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   Future<void> _loadAssetDiet() async {
     try {
       final String response = await rootBundle.loadString('assets/dieta.json');
+      debugPrint("📄 JSON Letto: $response"); // <--- AGGIUNGI QUESTA RIGA
       final data = json.decode(response);
       setState(() {
         dietData = data['plan'];
         substitutions = data['substitutions'];
       });
     } catch (e) {
-      debugPrint("Nessun asset dieta trovato");
+      debugPrint("❌ Errore caricamento asset: $e");
     }
   }
 

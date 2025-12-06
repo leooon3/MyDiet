@@ -16,128 +16,176 @@ class NotificationService {
 
   bool _isInitialized = false;
 
+  // IMPORTANTE: Cambiando questo ID, Android resetta le impostazioni delle notifiche per l'app
+  static const String _channelId = 'mydiet_channel_v3';
+  static const String _channelName = 'Promemoria Pasti';
+  static const String _channelDesc = 'Notifiche per colazione, pranzo e cena';
+
   Future<void> init() async {
     if (_isInitialized) return;
 
-    // 1. Timezone
-    tz.initializeTimeZones();
-    try {
-      final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(timeZoneInfo.identifier));
-      debugPrint("🌍 Timezone: ${timeZoneInfo.identifier}");
-    } catch (e) {
-      debugPrint("⚠️ Timezone Error: $e. Fallback UTC.");
-      tz.setLocalLocation(tz.UTC);
-    }
-
-    // 2. Android: USARE ic_launcher (PNG) NON launcher_icon (XML)
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    final DarwinInitializationSettings initializationSettingsDarwin =
-        DarwinInitializationSettings(
-          requestAlertPermission: true,
-          requestBadgePermission: true,
-          requestSoundPermission: true,
-        );
-
-    final InitializationSettings initializationSettings =
-        InitializationSettings(
-          android: initializationSettingsAndroid,
-          iOS: initializationSettingsDarwin,
-        );
-
-    await flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (details) {
-        debugPrint("🔔 Click: ${details.payload}");
-      },
-    );
-
-    // 3. Canale Android
-    if (Platform.isAndroid) {
-      final AndroidNotificationChannel channel =
-          const AndroidNotificationChannel(
-            'mydiet_channel_id',
-            'Promemoria Pasti',
-            description: 'Notifiche Dieta',
-            importance: Importance.max,
-            playSound: true,
-          );
-
-      await flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.createNotificationChannel(channel);
-    }
-
-    _isInitialized = true;
-  }
-
-  // --- PERMESSI ---
-  Future<bool> checkPermissions() async {
-    if (Platform.isAndroid) {
-      // 1. Notifiche (Android 13+)
-      final notif = await Permission.notification.status;
-      if (notif.isDenied || notif.isPermanentlyDenied) {
-        debugPrint("Richiedo permesso Notifiche...");
-        final res = await Permission.notification.request();
-        if (!res.isGranted) return false;
-      }
-
-      // 2. Sveglie Esatte (Android 12+)
-      final alarm = await Permission.scheduleExactAlarm.status;
-      if (alarm.isDenied) {
-        debugPrint("Richiedo permesso Sveglie Esatte...");
-        final res = await Permission.scheduleExactAlarm.request();
-        if (!res.isGranted) return false; // Potrebbe richiedere riavvio app
-      }
-      return true;
-    }
-    return true; // iOS gestito in init
-  }
-
-  // --- SCHEDULING ---
-  Future<void> scheduleTestNotification() async {
-    await init();
-    bool hasPerms = await checkPermissions();
-    if (!hasPerms) {
-      debugPrint("❌ Permessi mancanti per il test!");
+    // FIX: Evita crash su Windows/Linux
+    if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) {
+      debugPrint("⚠️ Notifiche disabilitate su Desktop (Windows/Linux).");
       return;
     }
 
+    try {
+      // 1. Inizializza Timezone
+      tz.initializeTimeZones();
+      try {
+        final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
+        tz.setLocalLocation(tz.getLocation(timeZoneInfo.identifier));
+        debugPrint("🌍 Timezone rilevato: ${timeZoneInfo.identifier}");
+      } catch (e) {
+        debugPrint("⚠️ Errore Timezone: $e. Uso UTC.");
+        tz.setLocalLocation(tz.UTC);
+      }
+
+      // 2. Configurazione Icone e Permessi Base
+      // Usa @mipmap/ic_launcher per garantire la compatibilità con l'icona dell'app
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+
+      final DarwinInitializationSettings initializationSettingsDarwin =
+          DarwinInitializationSettings(
+            requestAlertPermission: true,
+            requestBadgePermission: true,
+            requestSoundPermission: true,
+          );
+
+      final InitializationSettings initializationSettings =
+          InitializationSettings(
+            android: initializationSettingsAndroid,
+            iOS: initializationSettingsDarwin,
+            macOS: initializationSettingsDarwin,
+          );
+
+      await flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (details) {
+          debugPrint("🔔 Notifica cliccata: ${details.payload}");
+        },
+      );
+
+      // 3. Configurazione Canale Android (Specifico per Oppo/Realme/Xiaomi)
+      if (Platform.isAndroid) {
+        final androidImplementation = flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+
+        if (androidImplementation != null) {
+          // Richiesta permessi specifica per Android 13+ tramite il plugin
+          await androidImplementation.requestNotificationsPermission();
+
+          // Creazione Canale ad Alta Priorità
+          const AndroidNotificationChannel channel = AndroidNotificationChannel(
+            _channelId,
+            _channelName,
+            description: _channelDesc,
+            importance: Importance.max, // Fondamentale per il banner
+            playSound: true,
+            enableVibration: true,
+          );
+
+          await androidImplementation.createNotificationChannel(channel);
+        }
+      }
+
+      _isInitialized = true;
+      debugPrint("✅ NotificationService pronto.");
+    } catch (e) {
+      debugPrint("❌ Errore Init Notifiche: $e");
+    }
+  }
+
+  /// Controlla e richiede i permessi di sistema (Settings Android)
+  Future<bool> checkPermissions() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return true;
+
+    if (Platform.isAndroid) {
+      // 1. Notifiche (Android 13+)
+      final statusNotif = await Permission.notification.status;
+      if (statusNotif.isDenied || statusNotif.isPermanentlyDenied) {
+        debugPrint("Richiesta permesso NOTIFICHE al sistema...");
+        final res = await Permission.notification.request();
+        if (!res.isGranted) {
+          debugPrint("❌ Permesso Notifiche NEGATO.");
+          return false;
+        }
+      }
+
+      // 2. Sveglie Esatte (Android 12+) - Necessario per schedule esatto
+      final statusAlarm = await Permission.scheduleExactAlarm.status;
+      if (statusAlarm.isDenied) {
+        debugPrint("Richiesta permesso SVEGLIE ESATTE...");
+        final res = await Permission.scheduleExactAlarm.request();
+        if (!res.isGranted) {
+          debugPrint(
+            "⚠️ Permesso Sveglie Esatte negato (le notifiche potrebbero ritardare).",
+          );
+          // Non blocchiamo l'app, ma avvisiamo
+        }
+      }
+      return true;
+    }
+    return true;
+  }
+
+  /// Pianifica una notifica di test tra 15 secondi
+  Future<void> scheduleTestNotification() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+
+    await init();
+    bool hasPerms = await checkPermissions();
+    if (!hasPerms) {
+      debugPrint("❌ Impossibile inviare test: permessi mancanti.");
+      return;
+    }
+
+    // Calcola orario: Adesso + 15 secondi
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    // Aggiungiamo 15 secondi per essere sicuri
     final tz.TZDateTime scheduledDate = now.add(const Duration(seconds: 15));
 
-    debugPrint("⏳ Scheduling Test tra 15s: $scheduledDate");
+    debugPrint("⏳ Scheduling Test su canale $_channelId per: $scheduledDate");
 
     try {
       await flutterLocalNotificationsPlugin.zonedSchedule(
-        999,
+        999, // ID univoco per il test
         'Funziona! 🚀',
-        'Se leggi questo, il sistema è operativo.',
+        'Se leggi questo, il sistema è operativo al 100%.',
         scheduledDate,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'mydiet_channel_id',
-            'Promemoria Pasti',
+            _channelId,
+            _channelName,
+            channelDescription: _channelDesc,
             importance: Importance.max,
             priority: Priority.high,
-            fullScreenIntent: true,
+            visibility: NotificationVisibility.public,
+            enableVibration: true,
+            playSound: true,
+            // fullScreenIntent: true, // Decommentare se serve popup a schermo intero
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
           ),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode
+            .exactAllowWhileIdle, // Più aggressivo per superare Doze mode
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-      debugPrint("✅ Comando inviato al sistema.");
+      debugPrint("✅ Comando inviato correttamente.");
     } catch (e) {
       debugPrint("❌ Errore ZonedSchedule: $e");
     }
   }
 
+  /// Pianifica le notifiche giornaliere dei pasti
   Future<void> scheduleDailyNotification({
     required int id,
     required String title,
@@ -145,6 +193,8 @@ class NotificationService {
     required int hour,
     required int minute,
   }) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+
     await init();
 
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
@@ -157,6 +207,7 @@ class NotificationService {
       minute,
     );
 
+    // Se l'orario è già passato oggi, pianifica per domani
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
@@ -169,25 +220,34 @@ class NotificationService {
         scheduledDate,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'mydiet_channel_id',
-            'Promemoria Pasti',
+            _channelId,
+            _channelName,
+            channelDescription: _channelDesc,
             importance: Importance.max,
             priority: Priority.high,
-            fullScreenIntent: true,
+            playSound: true,
           ),
+          iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
+        matchDateTimeComponents:
+            DateTimeComponents.time, // Ripeti ogni giorno alla stessa ora
       );
-      debugPrint("📅 Programmato ID $id: $scheduledDate");
+      debugPrint("📅 Notifica $id programmata per: $scheduledDate");
     } catch (e) {
-      debugPrint("❌ Errore Daily: $e");
+      debugPrint("❌ Errore Daily Schedule: $e");
     }
   }
 
   Future<void> cancelNotification(int id) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
     await flutterLocalNotificationsPlugin.cancel(id);
+  }
+
+  Future<void> cancelAll() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    await flutterLocalNotificationsPlugin.cancelAll();
   }
 }
