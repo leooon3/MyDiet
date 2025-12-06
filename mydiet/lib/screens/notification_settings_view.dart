@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class NotificationSettingsView extends StatefulWidget {
   const NotificationSettingsView({super.key});
@@ -26,16 +25,24 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
   @override
   void initState() {
     super.initState();
+    for (var meal in _meals) {
+      int id = meal['id'];
+      _enabled[id] = false;
+      _times[id] = TimeOfDay(
+        hour: meal['defaultHour'],
+        minute: meal['defaultMin'],
+      );
+    }
     _loadPreferences();
   }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       for (var meal in _meals) {
         int id = meal['id'];
         _enabled[id] = prefs.getBool('meal_enabled_$id') ?? false;
-
         int h = prefs.getInt('meal_hour_$id') ?? meal['defaultHour'];
         int m = prefs.getInt('meal_min_$id') ?? meal['defaultMin'];
         _times[id] = TimeOfDay(hour: h, minute: m);
@@ -44,45 +51,23 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
   }
 
   Future<void> _toggleMeal(int id, bool value) async {
-    // Se l'utente sta cercando di ATTIVARE
+    final prefs = await SharedPreferences.getInstance();
     if (value) {
-      // 1. Controllo permessi base (Notifiche)
-      bool hasPermission = await NotificationService()
-          .checkAndRequestPermissions();
-      if (!hasPermission) {
-        if (mounted) _showPermissionDialog();
-        return; // STOP! Non attivare lo switch graficamente
-      }
-
-      // 2. Controllo specifico per le SVEGLIE ESATTE (Android 12+)
-      var exactStatus = await Permission.scheduleExactAlarm.status;
-      if (exactStatus.isDenied) {
-        // Apre le impostazioni di sistema
-        await Permission.scheduleExactAlarm.request();
-
-        // STOP! È fondamentale uscire qui.
-        // L'utente deve andare nelle impostazioni, attivare la spunta, tornare indietro
-        // e ri-cliccare lo switch nell'app. Non possiamo programmare ora.
+      // Controllo esplicito permessi
+      bool granted = await NotificationService().checkPermissions();
+      if (!granted) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                "Abilita 'Sveglie e promemoria' nelle impostazioni e riprova.",
-              ),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 4),
+              content: Text("Permessi negati nelle impostazioni Android!"),
             ),
           );
         }
-        return;
+        return; // Non attivare lo switch
       }
     }
 
-    // Se arriviamo qui, abbiamo TUTTI i permessi. Possiamo salvare e programmare.
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _enabled[id] = value;
-    });
+    setState(() => _enabled[id] = value);
     await prefs.setBool('meal_enabled_$id', value);
 
     if (value) {
@@ -90,32 +75,6 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
     } else {
       NotificationService().cancelNotification(id);
     }
-  }
-
-  // --- NUOVO POP-UP ---
-  void _showPermissionDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Permessi mancanti ⚠️"),
-        content: const Text(
-          "Per ricevere i promemoria dei pasti, devi consentire le notifiche nelle impostazioni del telefono.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Annulla"),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              openAppSettings(); // <--- Magia: Apre le impostazioni dell'app
-            },
-            child: const Text("Apri Impostazioni"),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _pickTime(int id) async {
@@ -126,9 +85,7 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
 
     if (picked != null) {
       final prefs = await SharedPreferences.getInstance();
-      setState(() {
-        _times[id] = picked;
-      });
+      setState(() => _times[id] = picked);
       await prefs.setInt('meal_hour_$id', picked.hour);
       await prefs.setInt('meal_min_$id', picked.minute);
 
@@ -142,138 +99,88 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
     final meal = _meals.firstWhere((m) => m['id'] == id);
     final time = _times[id]!;
 
-    NotificationService().scheduleMealReminder(
+    NotificationService().scheduleDailyNotification(
       id: id,
       title: "È ora di ${meal['label']}! 🍽️",
-      body: "Buon appetito! Ricordati di controllare la dieta.",
+      body: "Buon appetito!",
       hour: time.hour,
       minute: time.minute,
     );
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Promemoria impostato per le ${time.format(context)}"),
-      ),
+      SnackBar(content: Text("Impostato: ${time.format(context)}")),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Orari Pasti"),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text("Promemoria Pasti")),
       body: Column(
         children: [
+          Container(
+            color: Colors.orange[50],
+            padding: const EdgeInsets.all(16),
+            width: double.infinity,
+            child: Column(
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.timer_3),
+                  label: const Text("TEST NOTIFICA (15s)"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    NotificationService().scheduleTestNotification();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Chiudi l'app ora! Attendi 15s..."),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "1. Premi il tasto\n2. Esci dall'app (Home)\n3. Spegni lo schermo\n4. Aspetta 15 secondi",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.all(16),
               itemCount: _meals.length,
-              separatorBuilder: (context, index) => const Divider(),
+              separatorBuilder: (_, __) => const Divider(),
               itemBuilder: (context, index) {
                 final meal = _meals[index];
                 final int id = meal['id'];
                 final bool isEnabled = _enabled[id] ?? false;
-                final TimeOfDay time =
-                    _times[id] ?? const TimeOfDay(hour: 0, minute: 0);
+                final TimeOfDay time = _times[id]!;
 
                 return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    meal['label'],
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                  subtitle: Text(
-                    isEnabled
-                        ? "Notifica alle ${time.format(context)}"
-                        : "Notifiche disattivate",
-                    style: TextStyle(
-                      color: isEnabled ? Colors.green : Colors.grey,
-                    ),
-                  ),
+                  title: Text(meal['label']),
+                  subtitle: Text(isEnabled ? time.format(context) : "Off"),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (isEnabled)
                         IconButton(
-                          icon: const Icon(
-                            Icons.access_time,
-                            color: Colors.indigo,
-                          ),
+                          icon: const Icon(Icons.edit, color: Colors.blue),
                           onPressed: () => _pickTime(id),
                         ),
                       Switch(
                         value: isEnabled,
-                        activeTrackColor: Colors.green, // Correzione avviso
+                        activeThumbColor: Colors.green,
                         onChanged: (val) => _toggleMeal(id, val),
                       ),
                     ],
                   ),
                 );
               },
-            ),
-          ),
-
-          // --- TASTO TEST ---
-          Container(
-            padding: const EdgeInsets.all(20),
-            color: Colors.grey[100],
-            width: double.infinity,
-            child: Column(
-              children: [
-                const Text(
-                  "Problemi con le notifiche?",
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    // 1. CHIEDI PERMESSO PRIMA DI INVIARE
-                    bool hasPermission = await NotificationService()
-                        .checkAndRequestPermissions();
-
-                    if (hasPermission) {
-                      await NotificationService().showInstantNotification();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Invio test in corso..."),
-                            backgroundColor: Colors.blue,
-                          ),
-                        );
-                      }
-                    } else {
-                      // Se negato, mostra avviso
-                      if (context.mounted) _showPermissionDialog();
-                    }
-                  },
-                  icon: const Icon(Icons.notification_important),
-                  label: const Text("Invia Notifica di Prova Adesso"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                const Text(
-                  "Se non la ricevi, controlla le impostazioni Android.",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
             ),
           ),
         ],
