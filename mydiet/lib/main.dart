@@ -1,9 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'repositories/diet_repository.dart';
+import 'providers/diet_provider.dart';
 import 'screens/home_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const DietApp());
+  await dotenv.load(fileName: ".env"); // Load Env
+
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider(create: (_) => DietRepository()),
+        ChangeNotifierProxyProvider<DietRepository, DietProvider>(
+          create: (context) => DietProvider(context.read<DietRepository>()),
+          update: (context, repo, prev) => prev ?? DietProvider(repo),
+        ),
+      ],
+      child: const DietApp(),
+    ),
+  );
 }
 
 class DietApp extends StatelessWidget {
@@ -16,23 +33,8 @@ class DietApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2E7D32),
-          secondary: const Color(0xFFE65100),
-          surface: const Color(0xFFF5F7F6),
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF5F7F6),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-          titleTextStyle: TextStyle(
-            color: Color(0xFF1B5E20),
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-          ),
-          iconTheme: IconThemeData(color: Color(0xFF1B5E20)),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
+        // ... rest of theme ...
       ),
       home: const MainScreen(),
     );

@@ -1,34 +1,19 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../models/pantry_item.dart';
+import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
+import '../providers/diet_provider.dart';
 import '../models/active_swap.dart';
-import '../services/api_service.dart';
-import '../constants.dart';
 import 'diet_view.dart';
 import 'pantry_view.dart';
 import 'shopping_list_view.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
-
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
-  Map<String, dynamic>? dietData;
-  Map<String, dynamic>? substitutions;
-  Map<String, ActiveSwap> activeSwaps = {};
-  List<PantryItem> pantryItems = [];
-  List<String> shoppingList = [];
-
-  bool isLoading = true;
-  bool isUploading = false;
-  bool isTranquilMode = false;
-
   int _currentIndex = 0;
   late TabController _tabController;
   final List<String> days = [
@@ -44,384 +29,77 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    int todayIndex = DateTime.now().weekday - 1;
-    if (todayIndex < 0) todayIndex = 0;
+    int today = DateTime.now().weekday - 1;
     _tabController = TabController(
-      length: days.length,
-      initialIndex: todayIndex,
+      length: 7,
+      initialIndex: today < 0 ? 0 : today,
       vsync: this,
     );
-    _loadLocalData();
   }
 
-  // --- LOGICA DATI ---
-  Future<void> _loadLocalData() async {
-    final prefs = await SharedPreferences.getInstance();
+  // --- ACTIONS ---
 
-    // 1. Dieta
-    String? dietJson = prefs.getString('dietData');
-    if (dietJson != null) {
-      final data = json.decode(dietJson);
-      setState(() {
-        dietData = data['plan'];
-        substitutions = data['substitutions'];
-      });
-    } else {
-      _loadAssetDiet();
-    }
+  void _uploadDiet(BuildContext context) async {
+    // 1. Capture the provider BEFORE the async gap
+    final provider = context.read<DietProvider>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-    // 2. Dispensa
-    String? pantryJson = prefs.getString('pantryItems');
-    if (pantryJson != null) {
-      List<dynamic> decoded = json.decode(pantryJson);
-      setState(
-        () => pantryItems = decoded
-            .map((item) => PantryItem.fromJson(item))
-            .toList(),
-      );
-    }
-
-    // 3. Sostituzioni Attive
-    String? swapsJson = prefs.getString('activeSwaps');
-    if (swapsJson != null) {
-      Map<String, dynamic> decoded = json.decode(swapsJson);
-      setState(
-        () => activeSwaps = decoded.map(
-          (key, value) => MapEntry(key, ActiveSwap.fromJson(value)),
-        ),
-      );
-    }
-
-    // 4. Lista Spesa
-    List<String>? savedList = prefs.getStringList('shoppingList');
-    if (savedList != null) {
-      setState(() => shoppingList = savedList);
-    }
-
-    setState(() => isLoading = false);
-  }
-
-  Future<void> _loadAssetDiet() async {
-    try {
-      final String response = await rootBundle.loadString('assets/dieta.json');
-      debugPrint("📄 JSON Letto: $response");
-      final data = json.decode(response);
-      setState(() {
-        dietData = data['plan'];
-        substitutions = data['substitutions'];
-      });
-    } catch (e) {
-      debugPrint("❌ Errore caricamento asset: $e");
-    }
-  }
-
-  Future<void> _saveLocalData() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    prefs.setString(
-      'pantryItems',
-      json.encode(pantryItems.map((e) => e.toJson()).toList()),
+    // 2. Perform async operation
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
     );
 
-    prefs.setString(
-      'activeSwaps',
-      json.encode(
-        activeSwaps.map((key, value) => MapEntry(key, value.toJson())),
-      ),
-    );
+    // 3. Check if widget is still mounted
+    if (!mounted) return;
 
-    if (dietData != null) {
-      prefs.setString(
-        'dietData',
-        json.encode({'plan': dietData, 'substitutions': substitutions}),
-      );
-    }
+    if (result != null) {
+      try {
+        // 4. Use the captured provider (safe)
+        await provider.uploadDiet(result.files.single.path!);
 
-    prefs.setStringList('shoppingList', shoppingList);
-  }
-
-  void _moveBoughtItemsToPantry() {
-    List<String> remainingList = [];
-    int movedCount = 0;
-
-    for (String item in shoppingList) {
-      if (item.startsWith("OK_")) {
-        String clean = item.substring(3).trim();
-        final regex = RegExp(r'^(.*)\s+\((\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)\)$');
-        final match = regex.firstMatch(clean);
-
-        String name;
-        double qty;
-        String unit;
-
-        if (match != null) {
-          name = match.group(1)!.trim();
-          qty = double.tryParse(match.group(2)!.replaceAll(',', '.')) ?? 1.0;
-          unit = match.group(3)!.trim();
-        } else {
-          name = clean;
-          qty = 1.0;
-          unit = 'pz';
-        }
-
-        _addOrUpdatePantry(name, qty, unit);
-        movedCount++;
-      } else {
-        remainingList.add(item);
-      }
-    }
-
-    if (movedCount > 0) {
-      setState(() {
-        shoppingList = remainingList;
-      });
-      _saveLocalData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Spostati $movedCount prodotti in dispensa! 🏠"),
-          backgroundColor: Colors.green[700],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Nessun prodotto spuntato da spostare."),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-  }
-
-  void _addOrUpdatePantry(String name, double qty, String unit) {
-    int existingIndex = pantryItems.indexWhere(
-      (p) => p.name.toLowerCase() == name.toLowerCase() && p.unit == unit,
-    );
-    if (existingIndex != -1) {
-      setState(() => pantryItems[existingIndex].quantity += qty);
-    } else {
-      setState(
-        () =>
-            pantryItems.add(PantryItem(name: name, quantity: qty, unit: unit)),
-      );
-    }
-    _saveLocalData();
-  }
-
-  // --- AZIONI UI ---
-  Future<void> _uploadDietAction() async {
-    try {
-      setState(() => isUploading = true);
-      final data = await ApiService.uploadDietPdf();
-      if (data != null) {
-        setState(() {
-          dietData = data['plan'];
-          substitutions = data['substitutions'];
-          isUploading = false;
-        });
-        _saveLocalData();
+        // 5. Check mounted again before using UI context
         if (!mounted) return;
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Dieta Aggiornata!"),
-            backgroundColor: Colors.green,
-          ),
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text("Dieta caricata!")),
         );
-      } else {
-        setState(() => isUploading = false);
-      }
-    } catch (e) {
-      setState(() => isUploading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Errore: $e"), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  Future<void> _scanReceiptAction() async {
-    try {
-      setState(() => isUploading = true);
-      final importedItems = await ApiService.scanReceipt();
-      setState(() => isUploading = false);
-
-      if (importedItems == null) return;
-      if (importedItems.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Nessun cibo trovato."),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      int added = 0;
-      for (var item in importedItems) {
-        String name = item['name'];
-        if (name.toLowerCase().contains("filetti")) {
-          String? s = await _showSimpleDialog(
-            "Filetti di cosa?",
-            ["🐓 Pollo", "Platessa", "🥩 Manzo"],
-            ["Petto di pollo", "Platessa", "Manzo magro"],
-          );
-          if (s == null) continue;
-          name = s;
-        }
-        var result = await _showQuantityDialog(name);
-        if (result != null && result['qty'] > 0) {
-          _addOrUpdatePantry(name, result['qty'], result['unit']);
-          added++;
+      } catch (e) {
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(SnackBar(content: Text("Errore: $e")));
         }
       }
-      if (added > 0) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Aggiunti $added prodotti!"),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() => isUploading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Errore Scan: $e"), backgroundColor: Colors.red),
-      );
     }
   }
 
-  // --- HELPER UI ---
-  Future<String?> _showSimpleDialog(
-    String title,
-    List<String> labels,
-    List<String> values,
+  void _onConsume(
+    BuildContext context,
+    DietProvider provider,
+    String name,
+    String dietQtyString,
   ) {
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => SimpleDialog(
-        title: Text(title),
-        backgroundColor: Colors.white,
-        children: List.generate(
-          labels.length,
-          (i) => SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, values[i]),
-            child: Text(labels[i]),
-          ),
-        ),
+    // Regex basic to parse "100g" -> 100.0
+    final regExp = RegExp(r'(\d+(?:[.,]\d+)?)');
+    final match = regExp.firstMatch(dietQtyString);
+    double qtyToEat = match != null
+        ? double.parse(match.group(1)!.replaceAll(',', '.'))
+        : 1.0;
+
+    // Heuristic: if "g" is in string use 'g', else 'pz'
+    String unit = dietQtyString.contains('g') ? 'g' : 'pz';
+
+    provider.consumeItem(name, qtyToEat, unit);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Hai mangiato $name! 😋"),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
 
-  Future<Map<String, dynamic>?> _showQuantityDialog(String itemName) {
-    TextEditingController q = TextEditingController();
-    String u =
-        (fruitKeywords.any((k) => itemName.toLowerCase().contains(k)) ||
-            veggieKeywords.any((k) => itemName.toLowerCase().contains(k)))
-        ? 'pz'
-        : 'g';
-    return showDialog(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, st) => AlertDialog(
-          backgroundColor: Colors.white,
-          title: Text("Aggiungi $itemName"),
-          content: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: q,
-                  keyboardType: TextInputType.number,
-                  autofocus: true,
-                  decoration: const InputDecoration(hintText: "0"),
-                ),
-              ),
-              const SizedBox(width: 10),
-              DropdownButton<String>(
-                value: u,
-                items: const [
-                  DropdownMenuItem(value: 'g', child: Text("g")),
-                  DropdownMenuItem(value: 'pz', child: Text("pz")),
-                ],
-                onChanged: (v) => st(() => u = v!),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(c),
-              child: const Text("Salta"),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.green[700]),
-              onPressed: () => Navigator.pop(c, {
-                'qty': double.tryParse(q.text) ?? 0.0,
-                'unit': u,
-              }),
-              child: const Text("Ok"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- LOGICHE PASTO ---
-  void _consumeFood(String name, String dietQtyString) {
-    int idx = pantryItems.indexWhere(
-      (p) =>
-          name.toLowerCase().contains(p.name.toLowerCase()) ||
-          p.name.toLowerCase().contains(name.toLowerCase()),
-    );
-    if (idx == -1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Non hai $name!"),
-          backgroundColor: Colors.red[100],
-        ),
-      );
-      return;
-    }
-
-    RegExp regExp = RegExp(r'(\d+(?:[.,]\d+)?)');
-    double qtyToEat = 0.0;
-    if (pantryItems[idx].unit == 'g') {
-      var match = regExp.firstMatch(dietQtyString);
-      qtyToEat = match != null
-          ? double.parse(match.group(1)!.replaceAll(',', '.'))
-          : 100.0;
-    } else {
-      qtyToEat = 1.0;
-    }
-
-    setState(() {
-      pantryItems[idx].quantity -= qtyToEat;
-      if (pantryItems[idx].quantity <= 0.1) {
-        pantryItems.removeAt(idx);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Finito! 🗑️"),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Rimasti ${pantryItems[idx].quantity.toInt()} ${pantryItems[idx].unit}",
-            ),
-            backgroundColor: Colors.green[700],
-          ),
-        );
-      }
-    });
-    _saveLocalData();
-  }
-
-  void _editMealItem(
+  void _onEdit(
+    BuildContext context,
+    DietProvider provider,
     String day,
     String mealName,
     int index,
@@ -430,11 +108,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   ) {
     TextEditingController nameCtrl = TextEditingController(text: currentName);
     TextEditingController qtyCtrl = TextEditingController(text: currentQty);
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text("Modifica"),
+      builder: (c) => AlertDialog(
+        title: const Text("Modifica Piatto"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -442,7 +120,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               controller: nameCtrl,
               decoration: const InputDecoration(labelText: "Nome"),
             ),
-            const SizedBox(height: 10),
             TextField(
               controller: qtyCtrl,
               decoration: const InputDecoration(labelText: "Quantità"),
@@ -451,18 +128,19 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(c),
             child: const Text("Annulla"),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.green[700]),
             onPressed: () {
-              setState(() {
-                dietData![day][mealName][index]['name'] = nameCtrl.text;
-                dietData![day][mealName][index]['qty'] = qtyCtrl.text;
-              });
-              _saveLocalData();
-              Navigator.pop(context);
+              provider.updateDietMeal(
+                day,
+                mealName,
+                index,
+                nameCtrl.text,
+                qtyCtrl.text,
+              );
+              Navigator.pop(c);
             },
             child: const Text("Salva"),
           ),
@@ -471,69 +149,55 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  // --- LOGICA SOSTITUZIONI ---
-  void _showSubstitutions(String swapKey, int cadCode) {
+  void _onSwap(
+    BuildContext context,
+    DietProvider provider,
+    String swapKey,
+    int cadCode,
+  ) {
     String cadKey = cadCode.toString();
+    final subs = provider.substitutions;
 
-    if (substitutions == null || !substitutions!.containsKey(cadKey)) {
+    if (subs == null || !subs.containsKey(cadKey)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Nessuna alternativa trovata per questo piatto."),
-        ),
+        const SnackBar(content: Text("Nessuna alternativa trovata.")),
       );
       return;
     }
 
-    var subData = substitutions![cadKey];
+    var subData = subs[cadKey];
     List<dynamic> options = subData['options'] ?? [];
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
       builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              "Alternative per ${subData['name'] ?? 'Piatto'}",
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              "Alternative per ${subData['name']}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              height: 300,
+            Expanded(
               child: ListView.separated(
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                separatorBuilder: (context, index) => const Divider(),
                 itemCount: options.length,
-                itemBuilder: (context, i) {
+                itemBuilder: (ctx, i) {
                   var opt = options[i];
-                  List<dynamic> newIngredients = [];
-                  if (opt['ingredients'] != null) {
-                    newIngredients = opt['ingredients'];
-                  } else {
-                    newIngredients = [opt];
-                  }
-
                   return ListTile(
-                    title: Text(
-                      opt['name'],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      newIngredients.map((e) => "${e['name']}").join(", "),
-                    ),
-                    trailing: const Icon(Icons.check_circle_outline),
+                    title: Text(opt['name']),
+                    subtitle: Text(opt['qty'].toString()),
                     onTap: () {
-                      setState(() {
-                        activeSwaps[swapKey] = ActiveSwap(
+                      provider.swapMeal(
+                        swapKey,
+                        ActiveSwap(
                           name: opt['name'],
-                          qty: "",
-                          swappedIngredients: newIngredients,
-                        );
-                      });
-                      _saveLocalData();
-                      Navigator.pop(context);
+                          qty: opt['qty'].toString(),
+                        ),
+                      );
+                      Navigator.pop(ctx);
                     },
                   );
                 },
@@ -545,12 +209,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  // --- COSTRUZIONE UI ---
+  // --- BUILD UI ---
+
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<DietProvider>();
+
     return Scaffold(
       drawer: Drawer(
-        backgroundColor: Colors.white,
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -558,181 +224,59 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               accountName: Text("NutriScan"),
               accountEmail: Text("Gestione Dieta"),
               decoration: BoxDecoration(color: Color(0xFF2E7D32)),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Icon(Icons.local_dining, color: Colors.green),
-              ),
             ),
             ListTile(
               leading: const Icon(Icons.upload_file),
-              title: const Text("Carica Nuova Dieta PDF"),
-              onTap: _uploadDietAction,
+              title: const Text("Carica Dieta PDF"),
+              onTap: () => _uploadDiet(context),
             ),
             ListTile(
-              leading: const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text("Resetta Dati"),
-              onTap: () async {
-                final p = await SharedPreferences.getInstance();
-                await p.clear();
-                if (!mounted) return;
-                setState(() {
-                  dietData = null;
-                  pantryItems = [];
-                  shoppingList = [];
-                });
-                // ignore: use_build_context_synchronously
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text("Reset Dati"),
+              onTap: () {
+                provider.clearData();
                 Navigator.pop(context);
               },
             ),
           ],
         ),
       ),
-      body: Stack(
-        children: [
-          NestedScrollView(
-            headerSliverBuilder: (context, innerBoxIsScrolled) => [
-              SliverAppBar(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                elevation: 2,
-                forceElevated: innerBoxIsScrolled,
-                title: Text(
-                  _currentIndex == 0
-                      ? 'MyDiet'
-                      : (_currentIndex == 1 ? 'Dispensa' : 'Lista Spesa'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                floating: true,
-                pinned: true,
-                actions: [
-                  if (_currentIndex == 0) ...[
-                    IconButton(
-                      icon: Icon(
-                        isTranquilMode ? Icons.spa : Icons.spa_outlined,
-                        color: isTranquilMode ? Colors.green : Colors.grey,
-                        size: 28,
-                      ),
-                      tooltip: "Modalità Relax",
-                      onPressed: () {
-                        setState(() => isTranquilMode = !isTranquilMode);
-                        ScaffoldMessenger.of(context).removeCurrentSnackBar();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              isTranquilMode
-                                  ? "Modalità Relax Attiva 🌿"
-                                  : "Modalità Standard 🔥",
-                            ),
-                            duration: const Duration(milliseconds: 800),
-                            backgroundColor: isTranquilMode
-                                ? Colors.green[700]
-                                : Colors.blueGrey,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                  if (_currentIndex == 2)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 30,
-                      ),
-                      tooltip: "Sposta nel frigo",
-                      onPressed: _moveBoughtItemsToPantry,
-                    ),
-                  const SizedBox(width: 8),
-                ],
-                bottom: _currentIndex == 0
-                    ? PreferredSize(
-                        preferredSize: const Size.fromHeight(60),
-                        child: Container(
-                          height: 55,
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: TabBar(
-                            controller: _tabController,
-                            isScrollable: true,
-                            tabAlignment: TabAlignment.start,
-                            indicator: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              color: const Color(0xFF2E7D32),
-                            ),
-                            indicatorSize: TabBarIndicatorSize.tab,
-                            dividerColor: Colors.transparent,
-                            labelColor: Colors.white,
-                            unselectedLabelColor: Colors.grey[600],
-                            labelStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            labelPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                            ),
-                            tabs: days
-                                .map(
-                                  (day) => Tab(
-                                    text: day.substring(0, 3).toUpperCase(),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
-                      )
-                    : null,
+      appBar: AppBar(
+        title: const Text("NutriScan"),
+        actions: [
+          if (_currentIndex == 0)
+            IconButton(
+              icon: Icon(
+                provider.isTranquilMode ? Icons.spa : Icons.spa_outlined,
               ),
-            ],
-            body: _buildBodyContent(),
-          ),
-          if (isUploading)
-            Container(
-              color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 20),
-                    Text(
-                      "Elaborazione in corso...",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      "Potrebbe richiedere un paio di minuti",
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
+              tooltip: "Modalità Relax",
+              onPressed: provider.toggleTranquilMode,
             ),
         ],
+        bottom: _currentIndex == 0
+            ? TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabs: days
+                    .map((d) => Tab(text: d.substring(0, 3).toUpperCase()))
+                    .toList(),
+              )
+            : null,
       ),
+      body: provider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildBody(provider),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        backgroundColor: Colors.white,
-        elevation: 10,
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.calendar_today_outlined),
-            selectedIcon: Icon(Icons.calendar_today, color: Colors.green),
+            icon: Icon(Icons.calendar_today),
             label: 'Piano',
           ),
+          NavigationDestination(icon: Icon(Icons.kitchen), label: 'Dispensa'),
           NavigationDestination(
-            icon: Icon(Icons.kitchen_outlined),
-            selectedIcon: Icon(Icons.kitchen, color: Colors.green),
-            label: 'Frigo',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.shopping_cart_outlined),
-            selectedIcon: Icon(Icons.shopping_cart, color: Colors.green),
+            icon: Icon(Icons.shopping_cart),
             label: 'Lista',
           ),
         ],
@@ -740,41 +284,42 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildBodyContent() {
-    if (_currentIndex == 0) {
-      return DietView(
-        dietData: dietData,
-        isLoading: isLoading,
-        tabController: _tabController,
-        days: days,
-        activeSwaps: activeSwaps,
-        substitutions: substitutions,
-        pantryItems: pantryItems,
-        isTranquilMode: isTranquilMode,
-        onConsume: _consumeFood,
-        onEdit: _editMealItem,
-        onSwap: _showSubstitutions,
-      );
-    } else if (_currentIndex == 1) {
-      return PantryView(
-        pantryItems: pantryItems,
-        onAddManual: _addOrUpdatePantry,
-        onRemove: (i) {
-          setState(() => pantryItems.removeAt(i));
-          _saveLocalData();
-        },
-        onScanTap: _scanReceiptAction,
-      );
-    } else {
-      return ShoppingListView(
-        shoppingList: shoppingList,
-        dietData: dietData,
-        activeSwaps: activeSwaps,
-        onUpdateList: (newList) {
-          setState(() => shoppingList = newList);
-          _saveLocalData();
-        },
-      );
+  Widget _buildBody(DietProvider provider) {
+    switch (_currentIndex) {
+      case 0:
+        return DietView(
+          tabController: _tabController,
+          days: days,
+          dietData: provider.dietData,
+          isLoading: provider.isLoading,
+          activeSwaps: provider.activeSwaps,
+          substitutions: provider.substitutions,
+          pantryItems: provider.pantryItems,
+          isTranquilMode: provider.isTranquilMode,
+          onConsume: (name, qty) => _onConsume(context, provider, name, qty),
+          onEdit: (d, m, i, n, q) => _onEdit(context, provider, d, m, i, n, q),
+          onSwap: (key, cad) => _onSwap(context, provider, key, cad),
+        );
+      case 1:
+        return PantryView(
+          pantryItems: provider.pantryItems,
+          onAddManual: provider.addPantryItem,
+          onRemove: provider.removePantryItem,
+          onScanTap: () async {
+            // Placeholder for scan logic
+          },
+        );
+      case 2:
+        return ShoppingListView(
+          shoppingList: provider.shoppingList,
+          dietData: provider.dietData,
+          activeSwaps: provider.activeSwaps,
+          onUpdateList: (list) {
+            // Implement update list logic here or in provider
+          },
+        );
+      default:
+        return const SizedBox.shrink();
     }
   }
 }

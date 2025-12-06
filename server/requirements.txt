@@ -7,3 +7,5 @@ Pillow
 pytesseract
 google-generativeai
 pydantic
+pydantic-settings
+python-dotenv
