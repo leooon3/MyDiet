@@ -40,25 +40,19 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   // --- ACTIONS ---
 
   void _uploadDiet(BuildContext context) async {
-    // 1. Capture the provider BEFORE the async gap
     final provider = context.read<DietProvider>();
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-    // 2. Perform async operation
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );
 
-    // 3. Check if widget is still mounted
     if (!mounted) return;
 
     if (result != null) {
       try {
-        // 4. Use the captured provider (safe)
         await provider.uploadDiet(result.files.single.path!);
-
-        // 5. Check mounted again before using UI context
         if (!mounted) return;
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text("Dieta caricata!")),
@@ -190,11 +184,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     title: Text(opt['name']),
                     subtitle: Text(opt['qty'].toString()),
                     onTap: () {
+                      // [FIX] Ensure unit is passed so MealCard can display "100 g"
                       provider.swapMeal(
                         swapKey,
                         ActiveSwap(
                           name: opt['name'],
                           qty: opt['qty'].toString(),
+                          unit: opt['unit'] ?? "",
                         ),
                       );
                       Navigator.pop(ctx);
@@ -306,7 +302,31 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           onAddManual: provider.addPantryItem,
           onRemove: provider.removePantryItem,
           onScanTap: () async {
-            // Placeholder for scan logic
+            // [FIX] Implemented Receipt Scanning logic
+            FilePickerResult? result = await FilePicker.platform.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: ['jpg', 'png', 'jpeg', 'pdf'],
+            );
+
+            if (!mounted) return;
+
+            if (result != null) {
+              try {
+                int count = await provider.scanReceipt(
+                  result.files.single.path!,
+                );
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Aggiunti $count prodotti!")),
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Errore scansione: $e")),
+                  );
+                }
+              }
+            }
           },
         );
       case 2:
@@ -315,7 +335,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           dietData: provider.dietData,
           activeSwaps: provider.activeSwaps,
           onUpdateList: (list) {
-            // Implement update list logic here or in provider
+            // [FIX] Connected callback to provider
+            provider.updateShoppingList(list);
           },
         );
       default:

@@ -12,7 +12,8 @@ class DietProvider extends ChangeNotifier {
   Map<String, dynamic>? _substitutions;
   List<PantryItem> _pantryItems = [];
   Map<String, ActiveSwap> _activeSwaps = {};
-  final List<String> _shoppingList = [];
+  // [FIX] Removed 'final' to allow updates
+  List<String> _shoppingList = [];
 
   bool _isLoading = false;
   bool _isTranquilMode = false;
@@ -55,6 +56,7 @@ class DietProvider extends ChangeNotifier {
       );
     }
 
+    // [FIX] Load shopping list if needed (optional, assuming persistence isn't required for list strictly)
     notifyListeners();
   }
 
@@ -81,6 +83,12 @@ class DietProvider extends ChangeNotifier {
   // Actions
   void toggleTranquilMode() {
     _isTranquilMode = !_isTranquilMode;
+    notifyListeners();
+  }
+
+  // [FIX] Added method to update shopping list
+  void updateShoppingList(List<String> newList) {
+    _shoppingList = newList;
     notifyListeners();
   }
 
@@ -157,6 +165,7 @@ class DietProvider extends ChangeNotifier {
     _substitutions = null;
     _pantryItems = [];
     _activeSwaps = {};
+    _shoppingList.clear(); // [FIX] Clear shopping list too
     notifyListeners();
   }
 

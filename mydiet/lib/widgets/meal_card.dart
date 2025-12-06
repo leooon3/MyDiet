@@ -81,9 +81,28 @@ class MealCard extends StatelessWidget {
               String swapKey = "${day}_${mealName}_group_$groupIndex";
               bool isSwapped = activeSwaps.containsKey(swapKey);
 
-              List<dynamic> itemsToShow = isSwapped
-                  ? activeSwaps[swapKey]!.swappedIngredients ?? []
-                  : group;
+              // [FIX] Handling logic for swapped items
+              List<dynamic> itemsToShow;
+              if (isSwapped) {
+                final swap = activeSwaps[swapKey]!;
+                // If it's a complex swap with ingredients, use them
+                if (swap.swappedIngredients != null &&
+                    swap.swappedIngredients!.isNotEmpty) {
+                  itemsToShow = swap.swappedIngredients!;
+                } else {
+                  // Fallback: It's a single item swap (e.g., Banana)
+                  // Construct a list so the UI can render it
+                  String qtyDisplay = swap.qty;
+                  if (swap.unit.isNotEmpty) {
+                    qtyDisplay = "$qtyDisplay ${swap.unit}";
+                  }
+                  itemsToShow = [
+                    {'name': swap.name, 'qty': qtyDisplay},
+                  ];
+                }
+              } else {
+                itemsToShow = group;
+              }
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
@@ -154,7 +173,7 @@ class MealCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Mostra SOLO l'icona di scambio se disponibile
+                    // Show swap icon if available
                     if (cadCode > 0)
                       IconButton(
                         icon: const Icon(Icons.swap_horiz, color: Colors.green),
@@ -163,8 +182,6 @@ class MealCard extends StatelessWidget {
                             ? "Cambia alternativa"
                             : "Sostituisci",
                       ),
-
-                    // RIMOSSO IL TASTO UNDO (FRECCIA INDIETRO) QUI
                   ],
                 ),
               );
