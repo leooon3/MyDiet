@@ -5,19 +5,18 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mydiet"
-    compileSdk = flutter.compileSdkVersion
+    namespace = "com.example.diet_app" // Fixed to match your MainActivity package
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-        // [FIX] Enable Core Library Desugaring
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "1.8"
     }
 
     defaultConfig {
@@ -43,6 +42,5 @@ flutter {
 }
 
 dependencies {
-    // [FIX] Add desugar dependency
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
