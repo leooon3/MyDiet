@@ -13,7 +13,6 @@ class MainActivity: FlutterActivity() {
         
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             if (call.method == "getLocalTimezone") {
-                // Returns ID like "Europe/Rome"
                 result.success(TimeZone.getDefault().id)
             } else {
                 result.notImplemented()

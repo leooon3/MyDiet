@@ -114,28 +114,35 @@ Future<void> main() async {
   // 1. Init Environment
   await dotenv.load(fileName: ".env");
 
-  // 2. Init Firebase (Push Notifications)
+  // 2. Init Firebase (Safely)
   try {
     await Firebase.initializeApp();
   } catch (e) {
-    debugPrint("Firebase init error (ignore if testing offline): $e");
+    debugPrint("⚠️ Firebase Init Error: $e");
   }
 
-  // 3. Init Local Notifications
-  await NotificationService().init();
-
-  // 4. Init Workmanager (Background Tasks)
+  // 3. Init Local Notifications (Safely)
   try {
-    await Workmanager().initialize(callbackDispatcher);
-    // Schedule the check to run periodically (every 24 hours)
+    await NotificationService().init();
+  } catch (e) {
+    debugPrint("⚠️ Notification Init Error: $e");
+  }
+
+  // 4. Init Workmanager (Safely)
+  try {
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: true, // Keep this true for now to see logs
+    );
+    // Use the fixed enum 'notRequired'
     await Workmanager().registerPeriodicTask(
       "1",
       taskInventoryCheck,
       frequency: const Duration(hours: 24),
-      constraints: Constraints(networkType: NetworkType.not_required),
+      constraints: Constraints(networkType: NetworkType.notRequired),
     );
   } catch (e) {
-    debugPrint("Workmanager init error: $e");
+    debugPrint("⚠️ Workmanager Init Error: $e");
   }
 
   runApp(
