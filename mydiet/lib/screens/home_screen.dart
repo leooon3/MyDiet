@@ -6,8 +6,6 @@ import '../models/active_swap.dart';
 import '../services/api_client.dart';
 import 'diet_view.dart';
 import 'pantry_view.dart';
-// [IMPORTANT] Ensure this file exists in lib/screens/
-import 'notifications_screen.dart';
 import 'shopping_list_view.dart';
 
 class MainScreen extends StatefulWidget {
@@ -220,20 +218,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               leading: const Icon(Icons.upload_file),
               title: const Text("Carica Dieta PDF"),
               onTap: () => _uploadDiet(context),
-            ),
-            // [FIX] Correctly links to the NotificationsScreen class
-            ListTile(
-              leading: const Icon(Icons.notifications),
-              title: const Text("Impostazioni Notifiche"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const NotificationsScreen(),
-                  ),
-                );
-              },
             ),
             const Divider(),
             ListTile(
