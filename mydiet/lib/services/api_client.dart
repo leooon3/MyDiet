@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/env.dart';
 
-// [FIX] Custom Exceptions
 class ApiException implements Exception {
   final String message;
   final int statusCode;
@@ -23,13 +22,25 @@ class ApiClient {
   factory ApiClient() => _instance;
   ApiClient._internal();
 
-  Future<dynamic> uploadFile(String endpoint, String filePath) async {
+  // [UPDATED] Added 'fields' parameter to send extra data (like fcm_token)
+  Future<dynamic> uploadFile(
+    String endpoint,
+    String filePath, {
+    Map<String, String>? fields,
+  }) async {
     try {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('${Env.apiUrl}$endpoint'),
       );
+
+      // Add the file
       request.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+      // Add extra fields if provided
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
 
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
@@ -37,7 +48,6 @@ class ApiClient {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return json.decode(utf8.decode(response.bodyBytes));
       } else {
-        // [FIX] Throw specific exception
         throw ApiException(
           'Server returned error: ${response.body}',
           response.statusCode,
@@ -45,7 +55,6 @@ class ApiClient {
       }
     } catch (e) {
       if (e is ApiException) rethrow;
-      // [FIX] Wrap generic errors
       throw NetworkException('Network or parsing error: $e');
     }
   }

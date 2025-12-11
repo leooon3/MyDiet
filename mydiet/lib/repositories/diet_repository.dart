@@ -4,8 +4,19 @@ import '../services/api_client.dart';
 class DietRepository {
   final ApiClient _api = ApiClient();
 
-  Future<DietPlan> uploadDiet(String filePath) async {
-    final jsonResponse = await _api.uploadFile('/upload-diet', filePath);
+  // [UPDATED] Accepts optional fcmToken
+  Future<DietPlan> uploadDiet(String filePath, {String? fcmToken}) async {
+    Map<String, String>? fields;
+
+    if (fcmToken != null) {
+      fields = {'fcm_token': fcmToken};
+    }
+
+    final jsonResponse = await _api.uploadFile(
+      '/upload-diet',
+      filePath,
+      fields: fields,
+    );
     return DietPlan.fromJson(jsonResponse);
   }
 

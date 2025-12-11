@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // [ADDED]
 import '../repositories/diet_repository.dart';
 import '../services/storage_service.dart';
 import '../models/pantry_item.dart';
@@ -42,10 +43,23 @@ class DietProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // [UPDATED] Fetches FCM Token and sends it with the upload
   Future<void> uploadDiet(String path) async {
     _setLoading(true);
     try {
-      final result = await _repository.uploadDiet(path);
+      // 1. Get the Token
+      String? token;
+      try {
+        token = await FirebaseMessaging.instance.getToken();
+        debugPrint("FCM Token: $token");
+      } catch (e) {
+        debugPrint("Failed to get FCM token: $e");
+        // Continue anyway, just won't get push notification
+      }
+
+      // 2. Upload with Token
+      final result = await _repository.uploadDiet(path, fcmToken: token);
+
       _dietData = result.plan;
       _substitutions = result.substitutions;
       await _storage.saveDiet({
@@ -96,9 +110,7 @@ class DietProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // [FIX] New method to handle logic previously in UI
   void consumeSmart(String name, String rawQtyString) {
-    // Regex to parse "100g", "100,5", "100" -> 100.0
     final regExp = RegExp(r'(\d+(?:[.,]\d+)?)');
     final match = regExp.firstMatch(rawQtyString);
 
@@ -106,7 +118,6 @@ class DietProvider extends ChangeNotifier {
         ? double.parse(match.group(1)!.replaceAll(',', '.'))
         : 1.0;
 
-    // Heuristic: if "g" is in string use 'g', else 'pz'
     String unit = rawQtyString.contains('g') ? 'g' : 'pz';
 
     consumeItem(name, qtyToEat, unit);
@@ -140,7 +151,6 @@ class DietProvider extends ChangeNotifier {
       _dietData![day][mealName][index]['name'] = newName;
       _dietData![day][mealName][index]['qty'] = newQty;
 
-      // Save updated structure
       _storage.saveDiet({'plan': _dietData, 'substitutions': _substitutions});
       notifyListeners();
     }

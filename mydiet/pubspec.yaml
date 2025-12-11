@@ -17,6 +17,14 @@ dependencies:
   file_picker: ^10.3.7
   shared_preferences: ^2.5.3
 
+  # Notifications & Background Tasks
+  firebase_core: ^2.24.2
+  firebase_messaging: ^14.7.9
+  flutter_local_notifications: ^16.3.0
+  timezone: ^0.9.2
+  workmanager: ^0.5.2
+  permission_handler: ^11.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

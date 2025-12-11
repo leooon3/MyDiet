@@ -1,13 +1,26 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 import shutil
 import os
 import json
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 from app.core.config import settings
 from app.services.diet_service import DietParser
 from app.services.receipt_service import ReceiptScanner
 from app.services.normalization import normalize_meal_name
+
+# --- FIREBASE INIT ---
+# Only initialize if not already initialized (prevents errors on hot-reload)
+if not firebase_admin._apps:
+    try:
+        # Assumes serviceAccountKey.json is in the root 'server/' folder
+        cred = credentials.Certificate("serviceAccountKey.json")
+        firebase_admin.initialize_app(cred)
+        print("🔥 Firebase Admin Initialized")
+    except Exception as e:
+        print(f"⚠️ Warning: Firebase init failed (Notifications won't work): {e}")
 
 app = FastAPI()
 
@@ -64,10 +77,9 @@ def convert_to_app_format(gemini_output):
                 if final_cad == 0:
                     final_cad = cad_lookup_map.get(dish_name.lower(), 0)
 
-                # Return structured object instead of raw strings if possible
                 items.append({
                     "name": dish_name,
-                    "qty": piatto.get('quantita_totale', ''), # Ideally parse this further
+                    "qty": piatto.get('quantita_totale', ''),
                     "cad_code": final_cad,
                     "is_composed": piatto.get('tipo') == 'composto',
                     "ingredients": piatto.get('ingredienti', [])
@@ -84,18 +96,37 @@ def convert_to_app_format(gemini_output):
     }
 
 @app.post("/upload-diet")
-async def upload_diet(file: UploadFile = File(...)):
+async def upload_diet(
+    file: UploadFile = File(...),
+    fcm_token: str = Form(None) # [NEW] Accept token from Flutter
+):
     try:
         print(f"📥 Received PDF: {file.filename}")
         with open(settings.DIET_PDF_PATH, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        parser = DietParser() # Make sure DietParser uses settings.GOOGLE_API_KEY
+        parser = DietParser()
         raw_data = parser.parse_complex_diet(settings.DIET_PDF_PATH)
         final_data = convert_to_app_format(raw_data)
         
         with open(settings.DIET_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(final_data, f, indent=2, ensure_ascii=False)
+        
+        # [NEW] Send Push Notification
+        if fcm_token:
+            print(f"🔔 Sending notification to: {fcm_token[:10]}...")
+            try:
+                message = messaging.Message(
+                    notification=messaging.Notification(
+                        title="Dieta Pronta! 🥗",
+                        body="Il tuo nuovo piano nutrizionale è stato caricato con successo.",
+                    ),
+                    token=fcm_token,
+                )
+                response = messaging.send(message)
+                print(f"✅ Notification Sent: {response}")
+            except Exception as e:
+                print(f"⚠️ Notification Failed: {e}")
             
         return JSONResponse(content=final_data)
 
