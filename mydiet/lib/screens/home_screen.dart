@@ -217,6 +217,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     if (!mounted) return;
 
     showDialog(
+      // ignore: use_build_context_synchronously
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
@@ -261,6 +262,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     if (granted) {
                       await notifs.scheduleAllMeals();
                       if (mounted) {
+                        // ignore: use_build_context_synchronously
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text("Orari aggiornati e attivati! ✅"),
@@ -269,6 +271,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       }
                     } else {
                       if (mounted) {
+                        // ignore: use_build_context_synchronously
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(

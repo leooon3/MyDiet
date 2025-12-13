@@ -51,6 +51,7 @@ void callbackDispatcher() {
 class InventoryService {
   static Future<void> initialize() async {
     try {
+      // ignore: deprecated_member_use
       await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
       await Workmanager().registerPeriodicTask(
         "1",
@@ -85,8 +86,9 @@ bool _checkMissingIngredients(
     if (meal is List) {
       for (var dish in meal) {
         String dishName = dish['name'].toString().toLowerCase();
-        if (dishName.contains("libero") || dishName.contains("avanzi"))
+        if (dishName.contains("libero") || dishName.contains("avanzi")) {
           continue;
+        }
 
         bool found = pantry.any(
           (item) =>
