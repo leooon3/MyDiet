@@ -15,13 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Setup Environment (Java & Ruby)
+      # 1. Setup Java (Required for some Flutter tools)
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: "zulu"
           java-version: "17"
 
+      # 2. Setup Ruby (Required for CocoaPods)
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -34,7 +35,7 @@ jobs:
           channel: "stable"
           cache: true
 
-      # 2. Create Dummy GoogleService-Info.plist (Required for Firebase init)
+      # 3. Create Dummy GoogleService-Info.plist (Required for Firebase)
       - name: Create Dummy GoogleService-Info.plist
         run: |
           cat <<EOF > ios/Runner/GoogleService-Info.plist
@@ -73,22 +74,22 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      # 3. CRITICAL FIX: Disable Signing in Xcode Project & Configs
+      # 4. FIX: Disable Signing in Xcode Project & Configs
       - name: Disable Signing
         run: |
           cd ios
 
           # A. Modify project.pbxproj
-          # Change CODE_SIGN_STYLE from Automatic to Manual (This was the missing key fix)
+          # Change CODE_SIGN_STYLE from Automatic to Manual
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' Runner.xcodeproj/project.pbxproj
           # Remove Development Team
           sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj
           # Remove Provisioning Profile Specifier
           sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/PROVISIONING_PROFILE_SPECIFIER = "";/g' Runner.xcodeproj/project.pbxproj
-          # Remove Entitlements (Prevents "entitlements are not valid" error)
+          # Remove Entitlements
           sed -i '' '/CODE_SIGN_ENTITLEMENTS/d' Runner.xcodeproj/project.pbxproj
 
-          # B. Force settings in Release.xcconfig (Strongest Override)
+          # B. Force settings in Release.xcconfig
           echo "" >> Flutter/Release.xcconfig
           echo "CODE_SIGNING_ALLOWED=NO" >> Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> Flutter/Release.xcconfig
@@ -97,24 +98,27 @@ jobs:
 
           cd ..
 
-      # 4. Update Pods
+      # 5. FIX: Force iOS 14.0 in Podfile (Fixes workmanager_apple error)
       - name: Update Pods
         run: |
           cd ios
-          # Force iOS 13.0+ (Firebase requirement)
-          sed -i '' "s/^# platform :ios, '.*'/platform :ios, '13.0'/" Podfile
-          sed -i '' "s/^platform :ios, '.*'/platform :ios, '13.0'/" Podfile
+          # Remove lockfile to force re-evaluation
+          rm -f Podfile.lock
+
+          # Force set platform to 14.0 (handles commented or uncommented lines)
+          sed -i '' "s/^#* *platform :ios.*/platform :ios, '14.0'/" Podfile
+
+          # Install Pods
           pod install --repo-update
           cd ..
 
-      # 5. Build iOS (Unsigned)
+      # 6. Build iOS (Unsigned)
       - name: Build iOS App
         run: |
-          # Pass xcargs to forcefully disable signing during the build command
           flutter build ios --release --no-codesign --no-pub \
             --xcargs "CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' CODE_SIGN_STYLE=Manual"
 
-      # 6. Package IPA
+      # 7. Package IPA
       - name: Create IPA Payload
         run: |
           mkdir -p Payload
