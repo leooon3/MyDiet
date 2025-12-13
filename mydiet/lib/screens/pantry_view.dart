@@ -38,28 +38,26 @@ class _PantryViewState extends State<PantryView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(
-        0xFFF5F5F5,
-      ), // Sfondo leggermente grigio per contrasto
+      backgroundColor: const Color(0xFFF5F5F5),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: widget.onScanTap,
         icon: const Icon(Icons.document_scanner_outlined),
         label: const Text("Scan Scontrino"),
-        backgroundColor: const Color(0xFF1B5E20),
+        // Use Secondary (Orange) to encourage scanning
+        backgroundColor: Theme.of(context).colorScheme.secondary,
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
-          // --- AREA INPUT (Ottimizzata) ---
+          // --- AREA INPUT ---
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(30),
+                bottom: Radius.circular(16),
               ),
               boxShadow: [
-                // OTTIMIZZAZIONE: Ombra molto più leggera (meno calcoli per la GPU)
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
@@ -73,21 +71,10 @@ class _PantryViewState extends State<PantryView> {
                   flex: 3,
                   child: TextField(
                     controller: _nameController,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: "Cibo (es. Pasta)",
-                      prefixIcon: const Icon(
-                        Icons.edit_note,
-                        color: Colors.grey,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                      ),
+                      prefixIcon: Icon(Icons.edit_note, color: Colors.grey),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
                     ),
                   ),
                 ),
@@ -97,17 +84,9 @@ class _PantryViewState extends State<PantryView> {
                   child: TextField(
                     controller: _qtyController,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: "0",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                      ),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
                     ),
                   ),
                 ),
@@ -138,7 +117,8 @@ class _PantryViewState extends State<PantryView> {
                   onPressed: _handleAdd,
                   icon: const Icon(Icons.add),
                   style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFE65100),
+                    // Use Primary (Green) for standard add action
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -173,17 +153,12 @@ class _PantryViewState extends State<PantryView> {
                     ),
                   )
                 : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(
-                      16,
-                      16,
-                      16,
-                      80,
-                    ), // Spazio extra per il FAB
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
                     physics: const BouncingScrollPhysics(),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 1.4, // Leggermente più schiacciato
+                          childAspectRatio: 1.4,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
@@ -192,7 +167,6 @@ class _PantryViewState extends State<PantryView> {
                       final item = widget.pantryItems[index];
                       bool isLow = item.quantity < 2;
 
-                      // Protezione contro nomi vuoti per evitare crash
                       String initial = item.name.isNotEmpty
                           ? item.name[0].toUpperCase()
                           : "?";
@@ -200,7 +174,7 @@ class _PantryViewState extends State<PantryView> {
                       return Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.03),

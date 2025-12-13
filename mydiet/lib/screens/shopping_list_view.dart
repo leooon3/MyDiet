@@ -8,8 +8,7 @@ class ShoppingListView extends StatefulWidget {
   final Map<String, ActiveSwap> activeSwaps;
   final List<PantryItem> pantryItems;
   final Function(List<String>) onUpdateList;
-  final Function(String name, double qty, String unit)
-  onAddToPantry; // New callback
+  final Function(String name, double qty, String unit) onAddToPantry;
 
   const ShoppingListView({
     super.key,
@@ -93,7 +92,7 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                     return ExpansionTile(
                       leading: Checkbox(
                         value: areAllSelected,
-                        activeColor: Colors.green,
+                        activeColor: Theme.of(context).colorScheme.primary,
                         onChanged: (bool? value) {
                           setStateDialog(() {
                             if (value == true) {
@@ -120,7 +119,7 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                           title: Text(meal),
                           value: isSelected,
                           dense: true,
-                          activeColor: Colors.green,
+                          activeColor: Theme.of(context).colorScheme.primary,
                           contentPadding: const EdgeInsets.only(
                             left: 60,
                             right: 20,
@@ -150,8 +149,11 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                     _generateListFromSelection();
                     Navigator.pop(context);
                   },
+                  // Secondary (Orange) for Import Action inside Dialog?
+                  // Or Primary? Usually Dialog actions are Primary.
+                  // Let's keep it Green (Primary) here as it's a "Confirm" action.
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green[700],
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                   ),
                   child: const Text("Importa Selezionati"),
                 ),
@@ -368,7 +370,8 @@ class _ShoppingListViewState extends State<ShoppingListView> {
               child: FloatingActionButton.extended(
                 heroTag: "moveToPantry",
                 onPressed: _moveCheckedToPantry,
-                backgroundColor: Colors.orange[700],
+                // PRIMARY (Green) for Completion Action
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 icon: const Icon(Icons.kitchen, color: Colors.white),
                 label: const Text(
                   "Sposta nel Frigo",
@@ -379,7 +382,8 @@ class _ShoppingListViewState extends State<ShoppingListView> {
           FloatingActionButton.extended(
             heroTag: "importDiet",
             onPressed: _showImportDialog,
-            backgroundColor: Colors.indigo,
+            // SECONDARY (Orange) for Setup/Add Action
+            backgroundColor: Theme.of(context).colorScheme.secondary,
             icon: const Icon(Icons.auto_awesome, color: Colors.white),
             label: const Text(
               "Importa da Dieta",
@@ -429,14 +433,11 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                     widget.onUpdateList(list);
                   },
                   child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    color: Colors.white,
+                    // Shape automatically inherited from main.dart
                     child: CheckboxListTile(
                       value: isChecked,
-                      activeColor: Colors.grey,
+                      // Consistent Primary Green
+                      activeColor: Theme.of(context).colorScheme.primary,
                       title: Text(
                         display,
                         style: TextStyle(

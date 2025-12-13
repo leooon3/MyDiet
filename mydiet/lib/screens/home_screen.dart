@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../providers/diet_provider.dart';
 import '../models/active_swap.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
-import '../services/storage_service.dart'; // Added Import
+import '../services/storage_service.dart';
 import 'diet_view.dart';
 import 'pantry_view.dart';
 import 'shopping_list_view.dart';
@@ -336,16 +335,18 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<DietProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const UserAccountsDrawerHeader(
-              accountName: Text("NutriScan"),
-              accountEmail: Text("Gestione Dieta"),
-              decoration: BoxDecoration(color: Color(0xFF2E7D32)),
+            UserAccountsDrawerHeader(
+              // UPDATED: 'NutriScan' -> 'MyDiet'
+              accountName: const Text("MyDiet"),
+              accountEmail: const Text("Gestione Dieta"),
+              decoration: BoxDecoration(color: colorScheme.primary),
             ),
             ListTile(
               leading: const Icon(Icons.upload_file),
@@ -354,7 +355,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.access_time_filled, color: Colors.blue),
+              leading: Icon(
+                Icons.access_time_filled,
+                color: colorScheme.secondary,
+              ),
               title: const Text("Imposta Orari Pasti"),
               subtitle: const Text("Configura notifiche"),
               onTap: () {
@@ -375,7 +379,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         ),
       ),
       appBar: AppBar(
-        title: const Text("NutriScan"),
+        // UPDATED: 'NutriScan' -> 'MyDiet'
+        title: const Text("MyDiet"),
         actions: [
           if (_currentIndex == 0)
             IconButton(

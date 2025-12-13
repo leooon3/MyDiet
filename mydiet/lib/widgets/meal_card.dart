@@ -49,8 +49,8 @@ class MealCard extends StatelessWidget {
     // -----------------------------------------------------------
 
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      // The shape and elevation are handled by the main Theme,
+      // but we ensure it inherits correctly.
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -161,7 +161,9 @@ class MealCard extends StatelessWidget {
                                           ? FontWeight.w600
                                           : FontWeight.normal,
                                       color: isSwapped
-                                          ? Colors.blue[800]
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.secondary
                                           : Colors.black87,
                                     ),
                                   ),

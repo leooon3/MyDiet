@@ -8,7 +8,7 @@ import 'repositories/diet_repository.dart';
 import 'providers/diet_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
-import 'services/inventory_service.dart'; // New Service
+import 'services/inventory_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,11 +53,32 @@ class DietApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'NutriScan',
+      // UPDATED: Title changed from 'NutriScan' to 'MyDiet'
+      title: 'MyDiet',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
+        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2E7D32), // Primary Green
+          secondary: const Color(0xFFE65100), // Accent Orange
+          surface: Colors.white,
+        ),
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          color: Colors.white,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.grey[100],
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+        ),
       ),
       home: const MainScreen(),
     );

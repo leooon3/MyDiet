@@ -1,6 +1,6 @@
 {
-  "name": "mydiet",
-  "short_name": "mydiet",
+  "name": "MyDiet",
+  "short_name": "MyDiet",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0175C2",
