@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Setup Java (Required for some Flutter tools)
+      # 1. Setup Java (Required for some Flutter tools/Gradle)
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -89,7 +89,7 @@ jobs:
           # Remove Entitlements
           sed -i '' '/CODE_SIGN_ENTITLEMENTS/d' Runner.xcodeproj/project.pbxproj
 
-          # B. Force settings in Release.xcconfig
+          # B. Force settings in Release.xcconfig (This effectively passes the args to Xcode)
           echo "" >> Flutter/Release.xcconfig
           echo "CODE_SIGNING_ALLOWED=NO" >> Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> Flutter/Release.xcconfig
@@ -113,10 +113,10 @@ jobs:
           cd ..
 
       # 6. Build iOS (Unsigned)
+      # Removed the invalid --xcargs flag. The settings are now handled by step 4 via xcconfig.
       - name: Build iOS App
         run: |
-          flutter build ios --release --no-codesign --no-pub \
-            --xcargs "CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' CODE_SIGN_STYLE=Manual"
+          flutter build ios --release --no-codesign --no-pub
 
       # 7. Package IPA
       - name: Create IPA Payload
