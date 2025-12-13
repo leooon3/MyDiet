@@ -68,23 +68,23 @@ jobs:
           sed -i '' "s/^platform :ios, '.*'/platform :ios, '14.0'/" Podfile
           cd ..
 
-      # 3. FIX: Disable Signing in Release.xcconfig
-      # This overrides project settings and forces Xcode to stop asking for a Team.
-      - name: Disable Code Signing in XCConfig
+      # 3. FIX: AGGRESSIVE Signing Disabling
+      # We modify project.pbxproj directly to switch to Manual signing and remove any Team ID.
+      # We also modify Release.xcconfig to forcibly disable signing and entitlements.
+      - name: Disable Signing & Entitlements
         run: |
+          # 1. Modify Project Settings (switch to Manual, remove Team)
+          cd ios/Runner.xcodeproj
+          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/' project.pbxproj
+          sed -i '' 's/DevelopmentTeam = [^;]*;/DevelopmentTeam = "";/' project.pbxproj
+          cd ../..
+
+          # 2. Modify XCConfig to block signing and strip entitlements (fixes Push Notification error)
           echo "CODE_SIGNING_ALLOWED = NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED = NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGN_IDENTITY = " >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_ENTITLEMENTS = " >> ios/Flutter/Release.xcconfig
           echo "PROVISIONING_PROFILE_SPECIFIER = " >> ios/Flutter/Release.xcconfig
-
-      # 4. FIX: Disable Automatic Signing in project.pbxproj
-      # Switch to Manual style and clear DevelopmentTeam to prevent validation errors.
-      - name: Disable Automatic Signing in Project
-        run: |
-          cd ios/Runner.xcodeproj
-          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/' project.pbxproj
-          sed -i '' 's/DevelopmentTeam = .*/DevelopmentTeam = "";/' project.pbxproj
-          cd ../..
 
       - name: Install Pods
         run: |
