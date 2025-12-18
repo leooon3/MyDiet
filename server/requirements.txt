@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 pdfplumber
 thefuzz
@@ -11,3 +11,5 @@ pydantic-settings
 python-dotenv
 aiofiles
 firebase-admin
+opencv-python-headless
+python-Levenshtein

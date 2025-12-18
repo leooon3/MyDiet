@@ -25,19 +25,21 @@ class NotificationService:
                 print(f"⚠️ Firebase Init Error: {e}")
         else:
             print("⚠️ serviceAccountKey.json not found. Notifications disabled.")
-
-    def send_diet_ready(self, token: str):
-        if not token: return
+            
+    def send_diet_ready(self, fcm_token: str) -> None:
+        if not fcm_token or not isinstance(fcm_token, str):
+            print("⚠️ Skipping notification: Invalid FCM token")
+            return
         
         try:
             message = messaging.Message(
                 notification=messaging.Notification(
                     title="Dieta Pronta! 🥗",
-                    body="Il tuo nuovo piano nutrizionale è stato caricato.",
+                    body="Il tuo piano nutrizionale è stato elaborato."
                 ),
-                token=token,
+                token=fcm_token,
             )
             response = messaging.send(message)
-            print(f"✅ Notification Sent: {response}")
+            print(f"✅ Notification sent: {response}")
         except Exception as e:
-            print(f"❌ Notification Failed: {e}")
+            print(f"⚠️ Notification Error: {e}")

@@ -2,17 +2,23 @@ import os
 import json
 import uuid
 import aiofiles
-from typing import Optional
+from typing import Optional, List
 
 import firebase_admin
 from firebase_admin import credentials, auth
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Header, Depends
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 
 from app.services.diet_service import DietParser
 from app.services.receipt_service import ReceiptScanner
 from app.services.notification_service import NotificationService
 from app.services.normalization import normalize_meal_name
+
+# --- CONFIGURATION ---
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB limit
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".webp"}
 
 # --- FIREBASE SETUP ---
 if not firebase_admin._apps:
@@ -25,9 +31,41 @@ if not firebase_admin._apps:
 
 app = FastAPI()
 
+# --- CORS MIDDLEWARE (Crucial for Flutter Web) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Restrict this to your domain in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Initialize Services
 notification_service = NotificationService()
 diet_parser = DietParser()
+
+# --- UTILS ---
+async def save_upload_file(file: UploadFile, filename: str) -> None:
+    """Saves file safely with size limit checking."""
+    size = 0
+    try:
+        async with aiofiles.open(filename, 'wb') as out_file:
+            while content := await file.read(1024 * 1024):
+                size += len(content)
+                if size > MAX_FILE_SIZE:
+                    raise HTTPException(status_code=413, detail="File too large (Max 10MB)")
+                await out_file.write(content)
+    except Exception as e:
+        # Cleanup partial file
+        if os.path.exists(filename):
+            os.remove(filename)
+        raise e
+
+def validate_extension(filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File type not supported. Allowed: {ALLOWED_EXTENSIONS}")
+    return ext
 
 # --- SECURITY DEPENDENCY ---
 async def verify_token(authorization: str = Header(...)):
@@ -36,7 +74,9 @@ async def verify_token(authorization: str = Header(...)):
     
     token = authorization.split("Bearer ")[1]
     try:
-        decoded_token = auth.verify_id_token(token)
+        # [FIX] Run blocking auth verify in a threadpool to prevent freezing the API
+        decoded_token = await run_in_threadpool(auth.verify_id_token, token)
+        
         if not decoded_token.get('email_verified', False):
             raise HTTPException(status_code=403, detail="Email verification required")
         return decoded_token['uid'] 
@@ -54,21 +94,27 @@ async def upload_diet(
     fcm_token: Optional[str] = Form(None),
     user_id: str = Depends(verify_token) 
 ):
+    # [FIX] Validate extension explicitly
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed for diets")
+
     temp_filename = f"{uuid.uuid4()}.pdf"
     
     try:
-        async with aiofiles.open(temp_filename, 'wb') as out_file:
-            while content := await file.read(1024 * 1024):
-                await out_file.write(content)
-            
-        raw_data = diet_parser.parse_complex_diet(temp_filename)
+        await save_upload_file(file, temp_filename)
+        
+        # [FIX] parse_complex_diet might block, consider threadpool if it's slow
+        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, temp_filename)
         final_data = _convert_to_app_format(raw_data)
         
         if fcm_token:
-            notification_service.send_diet_ready(fcm_token)
+            # Send notification in background (optional, but better)
+            await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
             
         return JSONResponse(content=final_data)
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Processing Error: {str(e)}")
     finally:
@@ -81,26 +127,29 @@ async def scan_receipt(
     allowed_foods: str = Form(...),
     user_id: str = Depends(verify_token) 
 ):
-    temp_filename = f"{uuid.uuid4()}{os.path.splitext(file.filename)[1]}"
+    # [FIX] Validate extension
+    ext = validate_extension(file.filename)
+    temp_filename = f"{uuid.uuid4()}{ext}"
     
     try:
         try:
             food_list = json.loads(allowed_foods)
         except json.JSONDecodeError:
-            raise ValueError("allowed_foods must be a valid JSON string")
+            raise HTTPException(status_code=400, detail="allowed_foods must be valid JSON")
 
         if not isinstance(food_list, list):
-            raise ValueError("allowed_foods must be a JSON list of strings")
+            raise HTTPException(status_code=400, detail="allowed_foods must be a list")
 
-        async with aiofiles.open(temp_filename, 'wb') as out_file:
-            while content := await file.read(1024 * 1024):
-                await out_file.write(content)
-            
+        await save_upload_file(file, temp_filename)
+        
         current_scanner = ReceiptScanner(allowed_foods_list=food_list)
-        found_items = current_scanner.scan_receipt(temp_filename)
+        # [FIX] Offload OCR/Scanning to threadpool (This is CPU heavy!)
+        found_items = await run_in_threadpool(current_scanner.scan_receipt, temp_filename)
         
         return JSONResponse(content=found_items)
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -108,6 +157,10 @@ async def scan_receipt(
             os.remove(temp_filename)
 
 def _convert_to_app_format(gemini_output):
+    # (Kept logic mostly same, added safety check for None)
+    if not gemini_output:
+        return {"plan": {}, "substitutions": {}}
+
     app_plan = {}
     app_substitutions = {}
 
@@ -125,8 +178,8 @@ def _convert_to_app_format(gemini_output):
             options = []
             for opt in group.get('opzioni', []):
                 options.append({
-                    "name": opt['nome'],
-                    "qty": opt['quantita']
+                    "name": opt.get('nome', 'Unknown'),
+                    "qty": opt.get('quantita', '')
                 })
             
             if not options: 
@@ -141,6 +194,7 @@ def _convert_to_app_format(gemini_output):
     
     for giorno in raw_plan:
         day_name = giorno.get('giorno', 'Sconosciuto').strip().capitalize()
+        # Normalize Day Names
         for eng, it in [("lun", "Lunedì"), ("mar", "Martedì"), ("mer", "Mercoledì"), 
                         ("gio", "Giovedì"), ("ven", "Venerdì"), ("sab", "Sabato"), ("dom", "Domenica")]:
             if eng in day_name.lower(): day_name = it
@@ -152,13 +206,11 @@ def _convert_to_app_format(gemini_output):
             
             items = []
             for piatto in pasto.get('elenco_piatti', []):
-                # [FIX] Safer string conversion for main dish
                 dish_name = str(piatto.get('nome_piatto') or 'Piatto')
                 final_cad = piatto.get('cad_code', 0)
                 if final_cad == 0:
                     final_cad = cad_lookup_map.get(dish_name.lower(), 0)
 
-                # [FIX] Safer string conversion for ingredients (Prevents None)
                 formatted_ingredients = []
                 for ing in piatto.get('ingredienti', []):
                     formatted_ingredients.append({

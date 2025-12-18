@@ -34,20 +34,14 @@ class ApiClient {
         Uri.parse('${Env.apiUrl}$endpoint'),
       );
 
-      // --- SECURITY: Aggiungi Token Firebase ---
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // [FIX] Use cached token (false) instead of forcing refresh on every call.
-        // The SDK handles expiration automatically.
         final token = await user.getIdToken(false);
         request.headers['Authorization'] = 'Bearer $token';
       }
-      // ----------------------------------------
 
-      // Add the file
       request.files.add(await http.MultipartFile.fromPath('file', filePath));
 
-      // Add extra fields if provided
       if (fields != null) {
         request.fields.addAll(fields);
       }
@@ -55,17 +49,28 @@ class ApiClient {
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
 
+      // [FIX] Safe decoding to handle non-JSON errors (like Nginx 500 HTML)
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return json.decode(utf8.decode(response.bodyBytes));
+        if (response.body.isEmpty) return {};
+        try {
+          return json.decode(utf8.decode(response.bodyBytes));
+        } catch (e) {
+          throw ApiException(
+            "Invalid JSON response from server",
+            response.statusCode,
+          );
+        }
       } else {
-        throw ApiException(
-          'Server returned error: ${response.body}',
-          response.statusCode,
-        );
+        // [FIX] Truncate error message if it's too long (e.g. HTML dump)
+        String errorMsg = response.body;
+        if (errorMsg.length > 200) {
+          errorMsg = errorMsg.substring(0, 200) + "...";
+        }
+        throw ApiException('Server error: $errorMsg', response.statusCode);
       }
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw NetworkException('Network or parsing error: $e');
+      throw NetworkException('Network error: $e');
     }
   }
 }

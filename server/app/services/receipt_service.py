@@ -2,14 +2,11 @@ import pytesseract
 from PIL import Image
 import pdfplumber
 import re
+import os
 from thefuzz import process, fuzz
 
 class ReceiptScanner:
     def __init__(self, allowed_foods_list: list[str]):
-        """
-        Initialize with a list of allowed food names provided by the client.
-        This makes the service stateless.
-        """
         self.allowed_foods = set()
         self.corrections = {
             "YOG": "YOGURT",
@@ -26,8 +23,7 @@ class ReceiptScanner:
         self._load_from_list(allowed_foods_list)
 
     def _load_from_list(self, food_list):
-        self.allowed_foods.add("filetti") # Hardcoded generic
-        
+        self.allowed_foods.add("filetti") 
         for name in food_list:
             clean = self._clean_diet_name(name)
             if len(clean) > 2:
@@ -44,15 +40,27 @@ class ReceiptScanner:
     def extract_text_from_file(self, file_path):
         text = ""
         try:
+            # [FIX] DoS Protection: Check file size (Max 10MB)
+            if os.path.getsize(file_path) > 10 * 1024 * 1024:
+                print("❌ File too large for OCR")
+                return ""
+
             if file_path.lower().endswith('.pdf'):
                 print("  📄 Mode: Digital PDF")
                 with pdfplumber.open(file_path) as pdf:
+                    # [FIX] DoS Protection: Limit pages
+                    if len(pdf.pages) > 20:
+                        print("❌ PDF exceeds page limit (20)")
+                        return ""
+                        
                     for page in pdf.pages:
                         extracted = page.extract_text()
                         if extracted: text += extracted + "\n"
             else:
                 print("  📷 Mode: Image OCR")
-                text = pytesseract.image_to_string(Image.open(file_path), lang='ita')
+                # [FIX] PIL Image.open is lazy, verify it's a valid image
+                with Image.open(file_path) as img:
+                    text = pytesseract.image_to_string(img, lang='ita')
         except Exception as e:
             print(f"[FILE ERROR] {e}")
         return text

@@ -9,8 +9,9 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   Future<String?> getToken() async {
-    // Force refresh true to ensure token is fresh
-    return await currentUser?.getIdToken(true);
+    // [FIX] Changed to false.
+    // Uses cached token if valid. SDK handles refresh automatically.
+    return await currentUser?.getIdToken(false);
   }
 
   Future<UserCredential> signInWithGoogle() async {
@@ -40,7 +41,6 @@ class AuthService {
       email: email,
       password: password,
     );
-    // Modification 1: Send verification email immediately
     await credential.user?.sendEmailVerification();
   }
 
