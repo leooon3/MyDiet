@@ -16,21 +16,26 @@ from app.services.normalization import normalize_meal_name
 
 # --- FIREBASE SETUP ---
 if not firebase_admin._apps:
-    cred = credentials.ApplicationDefault()
-    firebase_admin.initialize_app(cred)
+    try:
+        # Tries to load the Service Account from GOOGLE_APPLICATION_CREDENTIALS
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred)
+        print("Firebase initialized with Service Account.")
+    except Exception as e:
+        print(f"Warning: Could not load Service Account ({e}). Fallback to manual ID.")
+        # FALLBACK: If Env Var is missing, you MUST paste your Project ID below
+        firebase_admin.initialize_app(options={
+            'projectId': 'INSERISCI_QUI_IL_TUO_PROJECT_ID' 
+        })
 
 app = FastAPI()
 
-# Initialize Services Globali
+# Initialize Services
 notification_service = NotificationService()
 diet_parser = DietParser()
 
 # --- SECURITY DEPENDENCY ---
 async def verify_token(authorization: str = Header(...)):
-    """
-    Verifica che l'header Authorization contenga un token Firebase valido.
-    Formato atteso: 'Bearer <token>'
-    """
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid auth header format")
     
@@ -38,14 +43,13 @@ async def verify_token(authorization: str = Header(...)):
     try:
         decoded_token = auth.verify_id_token(token)
         
-        # Modification 2: Active & Secure Mode
-        # Enforce that the user has verified their email address
+        # ACTIVE MODE: Security Check
         if not decoded_token.get('email_verified', False):
             raise HTTPException(status_code=403, detail="Email verification required")
             
         return decoded_token['uid'] 
     except ValueError as e:
-         raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         print(f"Auth Error: {e}")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -61,17 +65,12 @@ async def upload_diet(
     temp_filename = f"{uuid.uuid4()}.pdf"
     
     try:
-        # 1. Save upload to temp file
         with open(temp_filename, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 2. Parse PDF
         raw_data = diet_parser.parse_complex_diet(temp_filename)
-        
-        # 3. Normalize Data
         final_data = _convert_to_app_format(raw_data)
         
-        # 4. Send Notification
         if fcm_token:
             notification_service.send_diet_ready(fcm_token)
             
@@ -80,29 +79,25 @@ async def upload_diet(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # 5. Cleanup
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
 @app.post("/scan-receipt")
 async def scan_receipt(
     file: UploadFile = File(...),
-    allowed_foods: str = Form(...), # Expecting JSON string of list[str]
+    allowed_foods: str = Form(...),
     user_id: str = Depends(verify_token) 
 ):
     temp_filename = f"{uuid.uuid4()}{os.path.splitext(file.filename)[1]}"
     
     try:
-        # 1. Parse allowed foods from client
         food_list = json.loads(allowed_foods)
         if not isinstance(food_list, list):
             raise ValueError("allowed_foods must be a JSON list of strings")
 
-        # 2. Save Receipt Image
         with open(temp_filename, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 3. Initialize Scanner LOCALLY with the user's food list
         current_scanner = ReceiptScanner(allowed_foods_list=food_list)
         found_items = current_scanner.scan_receipt(temp_filename)
         
@@ -115,11 +110,9 @@ async def scan_receipt(
             os.remove(temp_filename)
 
 def _convert_to_app_format(gemini_output):
-    """Refactored normalization logic."""
     app_plan = {}
     app_substitutions = {}
 
-    # Substitutions
     raw_subs = gemini_output.get('tabella_sostituzioni', [])
     cad_lookup_map = {} 
 
@@ -146,7 +139,6 @@ def _convert_to_app_format(gemini_output):
                 "options": options
             }
 
-    # Weekly Plan
     raw_plan = gemini_output.get('piano_settimanale', [])
     
     for giorno in raw_plan:
