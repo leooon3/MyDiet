@@ -1,7 +1,7 @@
 import os
 import json
 import uuid
-import aiofiles  # [FIX] Added for async file operations
+import aiofiles
 from typing import Optional
 
 import firebase_admin
@@ -17,14 +17,11 @@ from app.services.normalization import normalize_meal_name
 # --- FIREBASE SETUP ---
 if not firebase_admin._apps:
     try:
-        # Standard initialization: uses GOOGLE_APPLICATION_CREDENTIALS env var automatically
         cred = credentials.ApplicationDefault()
         firebase_admin.initialize_app(cred)
         print("🔥 Firebase initialized via ApplicationDefault credentials.")
     except Exception as e:
         print(f"❌ Critical Firebase Init Error: {e}")
-        # Stop execution or handle gracefully if you have a secondary fallback
-        # Removed hardcoded project ID to prevent production leaks
 
 app = FastAPI()
 
@@ -40,11 +37,8 @@ async def verify_token(authorization: str = Header(...)):
     token = authorization.split("Bearer ")[1]
     try:
         decoded_token = auth.verify_id_token(token)
-        
-        # Security Check: Ensure email is verified
         if not decoded_token.get('email_verified', False):
             raise HTTPException(status_code=403, detail="Email verification required")
-            
         return decoded_token['uid'] 
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -63,13 +57,10 @@ async def upload_diet(
     temp_filename = f"{uuid.uuid4()}.pdf"
     
     try:
-        # [FIX] Async file write to prevent blocking the event loop
         async with aiofiles.open(temp_filename, 'wb') as out_file:
-            while content := await file.read(1024 * 1024):  # Read in 1MB chunks
+            while content := await file.read(1024 * 1024):
                 await out_file.write(content)
             
-        # Note: Diet parsing is CPU intensive. Ideally, offload to a background task (Celery/RQ)
-        # for production, but this is acceptable for a prototype.
         raw_data = diet_parser.parse_complex_diet(temp_filename)
         final_data = _convert_to_app_format(raw_data)
         
@@ -101,7 +92,6 @@ async def scan_receipt(
         if not isinstance(food_list, list):
             raise ValueError("allowed_foods must be a JSON list of strings")
 
-        # [FIX] Async file write
         async with aiofiles.open(temp_filename, 'wb') as out_file:
             while content := await file.read(1024 * 1024):
                 await out_file.write(content)
@@ -162,17 +152,26 @@ def _convert_to_app_format(gemini_output):
             
             items = []
             for piatto in pasto.get('elenco_piatti', []):
-                dish_name = piatto['nome_piatto']
+                # [FIX] Safer string conversion for main dish
+                dish_name = str(piatto.get('nome_piatto') or 'Piatto')
                 final_cad = piatto.get('cad_code', 0)
                 if final_cad == 0:
                     final_cad = cad_lookup_map.get(dish_name.lower(), 0)
 
+                # [FIX] Safer string conversion for ingredients (Prevents None)
+                formatted_ingredients = []
+                for ing in piatto.get('ingredienti', []):
+                    formatted_ingredients.append({
+                        "name": str(ing.get('nome') or ''),
+                        "qty": str(ing.get('quantita') or '')
+                    })
+
                 items.append({
                     "name": dish_name,
-                    "qty": piatto.get('quantita_totale', ''),
+                    "qty": str(piatto.get('quantita_totale') or ''),
                     "cad_code": final_cad,
                     "is_composed": piatto.get('tipo') == 'composto',
-                    "ingredients": piatto.get('ingredienti', [])
+                    "ingredients": formatted_ingredients
                 })
             
             if meal_name in app_plan[day_name]:

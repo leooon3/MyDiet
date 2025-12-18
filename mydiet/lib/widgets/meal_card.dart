@@ -9,7 +9,6 @@ class MealCard extends StatelessWidget {
   final Map<String, ActiveSwap> activeSwaps;
   final bool isTranquilMode;
   final Function(String key, int currentCad) onSwap;
-  // NEW: Callback for editing
   final Function(int index, String name, String qty)? onEdit;
 
   const MealCard({
@@ -25,10 +24,10 @@ class MealCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- LOGICA DI RAGGRUPPAMENTO (Ibrida: Header vs Singoli) ---
     List<List<dynamic>> groupedFoods = [];
     List<dynamic> currentGroup = [];
 
+    // --- GROUPING LOGIC ---
     for (var food in foods) {
       String qty = food['qty']?.toString() ?? "";
       bool isHeader = qty == "N/A";
@@ -49,9 +48,8 @@ class MealCard extends StatelessWidget {
     if (currentGroup.isNotEmpty) {
       groupedFoods.add(List.from(currentGroup));
     }
-    // -----------------------------------------------------------
+    // ---------------------
 
-    // Track the index in the original 'foods' list
     int globalIndex = 0;
 
     return Card(
@@ -78,9 +76,7 @@ class MealCard extends StatelessWidget {
               int groupIndex = entry.key;
               List<dynamic> group = entry.value;
 
-              // Capture start index for this group
               int currentGroupStart = globalIndex;
-              // Advance global index for next iteration
               globalIndex += group.length;
 
               if (group.isEmpty) return const SizedBox.shrink();
@@ -92,16 +88,13 @@ class MealCard extends StatelessWidget {
               String swapKey = "${day}_${mealName}_group_$groupIndex";
               bool isSwapped = activeSwaps.containsKey(swapKey);
 
-              // [FIX] Handling logic for swapped items
               List<dynamic> itemsToShow;
               if (isSwapped) {
                 final swap = activeSwaps[swapKey]!;
-                // If it's a complex swap with ingredients, use them
                 if (swap.swappedIngredients != null &&
                     swap.swappedIngredients!.isNotEmpty) {
                   itemsToShow = swap.swappedIngredients!;
                 } else {
-                  // Fallback: It's a single item swap (e.g., Banana)
                   String qtyDisplay = swap.qty;
                   if (swap.unit.isNotEmpty) {
                     qtyDisplay = "$qtyDisplay ${swap.unit}";
@@ -111,7 +104,18 @@ class MealCard extends StatelessWidget {
                   ];
                 }
               } else {
-                itemsToShow = group;
+                // EXPANSION LOGIC
+                itemsToShow = [];
+                for (var item in group) {
+                  itemsToShow.add(item); // Add the main dish
+
+                  // Add ingredients if they exist
+                  if (item['ingredients'] != null &&
+                      item['ingredients'] is List &&
+                      (item['ingredients'] as List).isNotEmpty) {
+                    itemsToShow.addAll(item['ingredients']);
+                  }
+                }
               }
 
               return Padding(
@@ -123,20 +127,22 @@ class MealCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: itemsToShow.asMap().entries.map((itemEntry) {
-                          int itemIndex = itemEntry.key;
                           var item = itemEntry.value;
 
-                          // Calculate exact index in original list for editing
-                          int originalIndex = currentGroupStart + itemIndex;
+                          // [FIX] CRASH PREVENTION
+                          // Use ?.toString() ?? "" to handle nulls safely
+                          String name = item['name']?.toString() ?? "Elemento";
+                          String qty = item['qty']?.toString() ?? "";
 
-                          bool isHeaderItem = (item['qty'] == "N/A");
+                          // Heuristic: Headers usually have N/A or empty quantity
+                          bool isHeaderItem = (qty == "N/A" || qty.isEmpty);
+
+                          // Logic for bold text and bullets
                           bool isBold =
                               (isHeaderItem && !isSwapped) ||
                               (isSwapped && group.length > 1);
-                          bool showBullet = !isHeaderItem && group.length > 1;
-
-                          String name = item['name'];
-                          String qty = item['qty']?.toString() ?? "";
+                          bool showBullet =
+                              !isHeaderItem && itemsToShow.length > 1;
 
                           if (isTranquilMode) {
                             String lowerName = name.toLowerCase();
@@ -188,8 +194,12 @@ class MealCard extends StatelessWidget {
                             ),
                           );
 
-                          // Enable Edit Tap only for unswapped items
-                          if (!isSwapped && onEdit != null) {
+                          // Only enable tap for the main group items (Dishes), not expanded ingredients
+                          bool isMainItem = group.contains(item);
+                          int originalIndex =
+                              currentGroupStart; // Simplified mapping
+
+                          if (!isSwapped && onEdit != null && isMainItem) {
                             return InkWell(
                               onTap: () => onEdit!(originalIndex, name, qty),
                               child: content,
@@ -201,7 +211,6 @@ class MealCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Show swap icon if available
                     if (cadCode > 0)
                       IconButton(
                         icon: const Icon(Icons.swap_horiz, color: Colors.green),
