@@ -152,7 +152,9 @@ class DietProvider extends ChangeNotifier {
         if (meals is Map) {
           meals.forEach((mealType, dishes) {
             if (dishes is List) {
-              for (var d in dishes) foods.add(d['name']);
+              for (var d in dishes) {
+                foods.add(d['name']);
+              }
             }
           });
         }
@@ -161,7 +163,9 @@ class DietProvider extends ChangeNotifier {
     if (_substitutions != null) {
       _substitutions!.forEach((key, group) {
         if (group['options'] is List) {
-          for (var opt in group['options']) foods.add(opt['name']);
+          for (var opt in group['options']) {
+            foods.add(opt['name']);
+          }
         }
       });
     }

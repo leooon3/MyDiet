@@ -86,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 'assets/icon.png',
                 width: 100,
                 height: 100,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     const Icon(Icons.eco, size: 80, color: Colors.white),
               ),
               const SizedBox(height: 24),
