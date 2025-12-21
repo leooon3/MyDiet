@@ -34,13 +34,14 @@ jobs:
           channel: "stable"
           cache: true
 
-      # 2. Inject REAL GoogleService-Info.plist (Requires GitHub Secret)
+      # 2. Inject REAL GoogleService-Info.plist
       - name: Create GoogleService-Info.plist
         env:
           GOOGLE_SERVICE_INFO: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}
         run: |
           if [ -z "$GOOGLE_SERVICE_INFO" ]; then
-            echo "::warning::Secret IOS_GOOGLE_SERVICE_INFO_PLIST is missing. App will crash on launch!"
+            echo "::error::Secret IOS_GOOGLE_SERVICE_INFO_PLIST is MISSING. The app will crash on launch."
+            # Create dummy to allow build to proceed, but warn user
             cat <<EOF > ios/Runner/GoogleService-Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -55,32 +56,37 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      # 3. CRITICAL FIX: Replace 'Automatic' with 'Manual' directly
-      - name: Disable Signing
+      # 3. CRITICAL FIX: Use Ruby for Robust Regex Replacement
+      - name: Disable Signing (Ruby)
         run: |
-          cd ios
+          ruby -e '
+            path = "ios/Runner.xcodeproj/project.pbxproj"
+            content = File.read(path)
+            
+            # 1. Force Manual Signing (Matches any whitespace/tabs)
+            content.gsub!(/CODE_SIGN_STYLE\s*=\s*"?Automatic"?;/, "CODE_SIGN_STYLE = Manual;")
+            
+            # 2. Remove Team & Profile
+            content.gsub!(/DEVELOPMENT_TEAM\s*=\s*[^;]*;/, "DEVELOPMENT_TEAM = \"\";")
+            content.gsub!(/PROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]*;/, "PROVISIONING_PROFILE_SPECIFIER = \"\";")
+            
+            # 3. Remove Identity
+            content.gsub!(/CODE_SIGN_IDENTITY\s*=\s*[^;]*;/, "CODE_SIGN_IDENTITY = \"\";")
+            content.gsub!(/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]"\s*=\s*[^;]*;/, "\"CODE_SIGN_IDENTITY[sdk=iphoneos*]\" = \"\";")
+            
+            File.write(path, content)
+            puts "Successfully patched project.pbxproj for unsigned build."
+          '
 
-          # A. Find and REPLACE 'Automatic' with 'Manual' (Fixes the duplicate issue)
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_STYLE = "Automatic";/CODE_SIGN_STYLE = Manual;/g' Runner.xcodeproj/project.pbxproj
+      # 4. Force XCConfig Overrides
+      - name: Override XCConfig
+        run: |
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_STYLE=Manual" >> ios/Flutter/Release.xcconfig
 
-          # B. Remove Team and Profile assignments
-          sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/PROVISIONING_PROFILE_SPECIFIER = "";/g' Runner.xcodeproj/project.pbxproj
-
-          # C. Remove Identity assignments
-          sed -i '' 's/CODE_SIGN_IDENTITY = [^;]*;/CODE_SIGN_IDENTITY = "";/g' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = [^;]*;/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";/g' Runner.xcodeproj/project.pbxproj
-
-          # D. Force XCConfig Overrides (Safety Net)
-          echo "CODE_SIGNING_ALLOWED=NO" >> Flutter/Release.xcconfig
-          echo "CODE_SIGNING_REQUIRED=NO" >> Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY=" >> Flutter/Release.xcconfig
-          echo "CODE_SIGN_STYLE=Manual" >> Flutter/Release.xcconfig
-
-          cd ..
-
-      # 4. Fix Podfile Platform
+      # 5. Fix Podfile Platform
       - name: Update Pods
         run: |
           cd ios
@@ -89,7 +95,7 @@ jobs:
           pod install --repo-update
           cd ..
 
-      # 5. Build iOS (Unsigned)
+      # 6. Build iOS (Unsigned)
       - name: Build iOS App
         run: |
           export CODE_SIGNING_ALLOWED=NO
@@ -97,7 +103,7 @@ jobs:
           export CODE_SIGN_IDENTITY=""
           flutter build ios --release --no-codesign --no-pub
 
-      # 6. Package IPA
+      # 7. Package IPA
       - name: Create IPA Payload
         run: |
           mkdir -p Payload
