@@ -112,11 +112,29 @@ class DietProvider extends ChangeNotifier {
 
       for (var item in items) {
         if (item is Map && item.containsKey('name')) {
-          double qty = 1.0;
-          if (item['quantity'] != null) {
-            qty = double.tryParse(item['quantity'].toString()) ?? 1.0;
+          String rawQty = item['quantity']?.toString() ?? "1";
+
+          // [FIX] Parse unit and quantity correctly from receipt string
+          double qty = _parseQty(rawQty);
+          String unit = 'pz';
+          String lowerRaw = rawQty.toLowerCase();
+
+          if (lowerRaw.contains('kg')) {
+            qty *= 1000;
+            unit = 'g';
+          } else if (lowerRaw.contains('mg')) {
+            unit = 'mg';
+          } else if (lowerRaw.contains('g')) {
+            // catch 'g' but not 'kg' if checked strictly
+            unit = 'g';
+          } else if (lowerRaw.contains('ml')) {
+            unit = 'ml';
+          } else if (lowerRaw.contains('l') && !lowerRaw.contains('ml')) {
+            qty *= 1000;
+            unit = 'ml';
           }
-          addPantryItem(item['name'], qty, 'pz');
+
+          addPantryItem(item['name'], qty, unit);
           count++;
         }
       }
@@ -129,7 +147,6 @@ class DietProvider extends ChangeNotifier {
     return count;
   }
 
-  // --- [FIX] ROBUST DUPLICATE CHECKING ---
   void addPantryItem(String name, double qty, String unit) {
     final normalizedName = name.trim().toLowerCase();
     final normalizedUnit = unit.trim().toLowerCase();
@@ -164,6 +181,15 @@ class DietProvider extends ChangeNotifier {
     final meals = _dietData![day][mealType];
     if (meals == null || meals is! List || dishIndex >= meals.length) return;
 
+    // Check if this meal is swapped - Consumption needs to know about swaps too?
+    // Usually consumption is done via the checkmark which consumes the *displayed* items.
+    // The current UI passes the *original* index.
+    // Ideally, we should consume the SWAP ingredients if swapped.
+
+    // NOTE: This logic assumes we consume the ORIGINAL if no swap logic is passed here.
+    // However, to keep it simple, if the UI shows the swap, we should probably handle it there.
+    // For now, let's stick to standard consumption logic, but improve the unit matching.
+
     final dish = meals[dishIndex];
 
     if (dish['ingredients'] != null &&
@@ -181,10 +207,11 @@ class DietProvider extends ChangeNotifier {
   void consumeSmart(String name, String rawQtyString) {
     double qtyToEat = _parseQty(rawQtyString);
     String unit = rawQtyString.toLowerCase().contains('g') ? 'g' : 'pz';
+    if (rawQtyString.toLowerCase().contains('ml')) unit = 'ml';
     consumeItem(name, qtyToEat, unit);
   }
 
-  // --- [FIX] SMARTER CONSUMPTION LOGIC ---
+  // --- [FIX] SMARTER CONSUMPTION & UNIT EQUIVALENCE ---
   void consumeItem(String name, double qty, String unit) {
     final searchName = name.trim().toLowerCase();
     final searchUnit = unit.trim().toLowerCase();
@@ -196,7 +223,7 @@ class DietProvider extends ChangeNotifier {
           p.unit.toLowerCase() == searchUnit,
     );
 
-    // Strategy 2: Fuzzy Name Match (Bidirectional Contains)
+    // Strategy 2: Fuzzy Name Match
     if (index == -1) {
       index = _pantryItems.indexWhere((p) {
         final pName = p.name.toLowerCase();
@@ -207,11 +234,34 @@ class DietProvider extends ChangeNotifier {
     if (index != -1) {
       var item = _pantryItems[index];
 
-      // Handle Unit Mismatch Logic
-      // If diet wants 'g' but fridge has 'pz', just subtract 1 pz as fallback
       double qtyToSubtract = qty;
-      if (item.unit.toLowerCase() != searchUnit) {
-        qtyToSubtract = 1.0;
+      final pUnit = item.unit.toLowerCase();
+
+      // [FIX] Unit Equivalence Logic
+      bool unitsMatch = pUnit == searchUnit;
+
+      // If units don't match strict string, check equivalents
+      if (!unitsMatch) {
+        bool isPz = pUnit == 'pz' || pUnit == '' || pUnit == 'pezzi';
+        bool targetIsPz =
+            searchUnit == 'pz' ||
+            searchUnit == '' ||
+            searchUnit == 'vasetto' ||
+            searchUnit == 'barattolo';
+
+        // 1 pz in fridge ~ 1 vasetto requested
+        if (isPz && targetIsPz) {
+          unitsMatch = true;
+        }
+        // 100g requested vs 1 pz in fridge -> Just take 1 pz
+        else if (isPz && searchUnit == 'g') {
+          qtyToSubtract = 1.0;
+        }
+        // 1 pz requested vs 100g in fridge -> Logic unclear, assume 1 unit subtraction?
+        // For now, if mismatch persists, fallback to 1.0
+        else {
+          qtyToSubtract = 1.0;
+        }
       }
 
       item.quantity -= qtyToSubtract;
@@ -235,7 +285,7 @@ class DietProvider extends ChangeNotifier {
     }
   }
 
-  // --- Tomato Availability Simulation ---
+  // --- [FIX] AVAILABILITY CHECK WITH SWAPS SUPPORT ---
   void _recalcAvailability() {
     if (_dietData == null) return;
 
@@ -277,54 +327,124 @@ class DietProvider extends ChangeNotifier {
 
         List<dynamic> dishes = List.from(mealsOfDay[mType]);
 
+        // Replicate grouping logic to identify swaps
+        List<List<int>> groups = [];
+        List<int> currentGroupIndices = [];
+
         for (int i = 0; i < dishes.length; i++) {
-          final dish = dishes[i];
-          bool isCovered = true;
-
-          List<dynamic> itemsToCheck = [];
-          if (dish['ingredients'] != null &&
-              (dish['ingredients'] as List).isNotEmpty) {
-            itemsToCheck = dish['ingredients'];
+          final d = dishes[i];
+          String qty = d['qty']?.toString() ?? "";
+          bool isHeader = qty == "N/A";
+          if (isHeader) {
+            if (currentGroupIndices.isNotEmpty)
+              groups.add(List.from(currentGroupIndices));
+            currentGroupIndices = [i];
           } else {
-            itemsToCheck = [
-              {'name': dish['name'], 'qty': dish['qty']},
-            ];
+            if (currentGroupIndices.isNotEmpty)
+              currentGroupIndices.add(i);
+            else
+              groups.add([
+                i,
+              ]); // Should not happen often if structured correctly
           }
+        }
+        if (currentGroupIndices.isNotEmpty)
+          groups.add(List.from(currentGroupIndices));
 
-          for (var item in itemsToCheck) {
-            String iName = item['name'].toString().trim().toLowerCase();
-            double iQty = _parseQty(item['qty'].toString());
+        // Process Groups
+        for (int gIdx = 0; gIdx < groups.length; gIdx++) {
+          List<int> indices = groups[gIdx];
+          if (indices.isEmpty) continue;
 
-            String? foundKey;
-            for (var key in simulatedFridge.keys) {
-              // Fuzzy Match for Simulation
-              if (key.contains(iName) || iName.contains(key)) {
-                foundKey = key;
-                break;
-              }
-            }
+          String swapKey = "${day}_${mType}_group_$gIdx";
+          bool isSwapped = _activeSwaps.containsKey(swapKey);
 
-            if (foundKey != null && simulatedFridge[foundKey]! > 0) {
-              // Simple subtraction logic for simulation
-              // If unit mismatch, we assume 1pz covers typical gram requests for simplicity in boolean check
-              double sub = iQty;
-              // If fridge has 'pz' (count < 50) and diet asks for > 50 (grams), treat 1 pz as coverage
-              if (simulatedFridge[foundKey]! < 50 && iQty > 50) sub = 1.0;
-
-              if (simulatedFridge[foundKey]! >= sub) {
-                simulatedFridge[foundKey] = simulatedFridge[foundKey]! - sub;
-              } else {
-                isCovered = false; // Partial stock counts as missing for safety
-              }
+          if (isSwapped) {
+            // CHECK SWAP INGREDIENTS
+            final swap = _activeSwaps[swapKey]!;
+            List<dynamic> swapItems = [];
+            if (swap.swappedIngredients != null &&
+                swap.swappedIngredients!.isNotEmpty) {
+              swapItems = swap.swappedIngredients!;
             } else {
-              isCovered = false;
+              swapItems = [
+                {'name': swap.name, 'qty': "${swap.qty} ${swap.unit}"},
+              ];
+            }
+
+            bool groupCovered = true;
+            for (var item in swapItems) {
+              if (!_checkAndConsumeSimulated(item, simulatedFridge)) {
+                groupCovered = false;
+              }
+            }
+
+            // Mark all indices in this group as covered/not covered based on the swap
+            for (int originalIdx in indices) {
+              newMap["${day}_${mType}_$originalIdx"] = groupCovered;
+            }
+          } else {
+            // CHECK ORIGINAL INGREDIENTS
+            for (int i in indices) {
+              final dish = dishes[i];
+              bool isCovered = true;
+
+              List<dynamic> itemsToCheck = [];
+              if (dish['ingredients'] != null &&
+                  (dish['ingredients'] as List).isNotEmpty) {
+                itemsToCheck = dish['ingredients'];
+              } else {
+                itemsToCheck = [
+                  {'name': dish['name'], 'qty': dish['qty']},
+                ];
+              }
+
+              for (var item in itemsToCheck) {
+                if (!_checkAndConsumeSimulated(item, simulatedFridge)) {
+                  isCovered = false;
+                }
+              }
+              newMap["${day}_${mType}_$i"] = isCovered;
             }
           }
-          newMap["${day}_${mType}_$i"] = isCovered;
         }
       }
     }
     _availabilityMap = newMap;
+  }
+
+  bool _checkAndConsumeSimulated(
+    Map<String, dynamic> item,
+    Map<String, double> fridge,
+  ) {
+    String iName = item['name'].toString().trim().toLowerCase();
+    double iQty = _parseQty(item['qty'].toString());
+    // Naive unit check for simulation (assuming grams vs pieces logic)
+    bool isGramRequest = iQty > 20;
+
+    String? foundKey;
+    for (var key in fridge.keys) {
+      if (key.contains(iName) || iName.contains(key)) {
+        foundKey = key;
+        break;
+      }
+    }
+
+    if (foundKey != null && fridge[foundKey]! > 0) {
+      double sub = iQty;
+      // Simulation fallback: if fridge has < 10 (likely pieces) and request > 20 (likely g), take 1
+      if (fridge[foundKey]! < 10 && isGramRequest) sub = 1.0;
+
+      if (fridge[foundKey]! >= sub) {
+        fridge[foundKey] = fridge[foundKey]! - sub;
+        return true;
+      } else {
+        // Partial stock -> Missing
+        fridge[foundKey] = 0; // Consume what's left
+        return false;
+      }
+    }
+    return false;
   }
 
   double _parseQty(String raw) {

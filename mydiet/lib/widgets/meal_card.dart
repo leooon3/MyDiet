@@ -42,7 +42,7 @@ class MealCard extends StatelessWidget {
       isToday = day.toLowerCase() == italianDays[todayIndex].toLowerCase();
     }
 
-    // Grouping
+    // Grouping Logic
     List<List<dynamic>> groupedFoods = [];
     List<dynamic> currentGroup = [];
     for (var food in foods) {
@@ -63,25 +63,30 @@ class MealCard extends StatelessWidget {
     int globalIndex = 0;
 
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      elevation: 2, // Slightly increased elevation
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ), // Rounder
+      margin: const EdgeInsets.symmetric(
+        vertical: 8,
+        horizontal: 12,
+      ), // [FIX] Bigger margin
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(16.0), // [FIX] Bigger padding
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Compact Header
+            // Header
             Text(
               mealName.toUpperCase(),
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 14, // [FIX] Larger Header
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-                letterSpacing: 1.0,
+                color: Colors.grey[700],
+                letterSpacing: 1.2,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
 
             ...groupedFoods.asMap().entries.map((entry) {
               int groupIndex = entry.key;
@@ -105,6 +110,15 @@ class MealCard extends StatelessWidget {
                   int.tryParse(header['cad_code']?.toString() ?? "0") ?? 0;
               String swapKey = "${day}_${mealName}_group_$groupIndex";
               bool isSwapped = activeSwaps.containsKey(swapKey);
+
+              // Decide colors based on Tranquil Mode
+              Color bgColor = Colors.grey.withOpacity(0.05);
+              Color? borderColor;
+              if (!isTranquilMode) {
+                borderColor = isAvailable
+                    ? Colors.green.withOpacity(0.5)
+                    : Colors.transparent;
+              }
 
               List<dynamic> itemsToShow;
               if (isSwapped) {
@@ -131,30 +145,35 @@ class MealCard extends StatelessWidget {
               }
 
               return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                margin: const EdgeInsets.only(
+                  bottom: 12,
+                ), // [FIX] More spacing between dishes
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(8),
-                  border: isAvailable
-                      ? Border.all(
-                          color: Colors.green.withOpacity(0.3),
-                          width: 1,
-                        )
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: borderColor != null
+                      ? Border.all(color: borderColor, width: 1.5)
                       : null,
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Status Icon (Compact)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2, right: 8),
-                      child: Icon(
-                        isAvailable ? Icons.kitchen : Icons.restaurant_menu,
-                        color: isAvailable ? Colors.green : Colors.grey[300],
-                        size: 16,
+                    // Status Icon (Hidden in Tranquil Mode)
+                    if (!isTranquilMode)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 12),
+                        child: Icon(
+                          isAvailable
+                              ? Icons.check_circle_outline
+                              : Icons.circle_outlined,
+                          color: isAvailable ? Colors.green : Colors.grey[400],
+                          size: 20, // [FIX] Bigger icon
+                        ),
                       ),
-                    ),
 
                     // Food Text
                     Expanded(
@@ -166,23 +185,26 @@ class MealCard extends StatelessWidget {
                           String qty = item['qty']?.toString() ?? "";
                           bool isHeaderItem = (qty == "N/A" || qty.isEmpty);
 
+                          String textDisplay;
+
+                          // [FIX] Tranquil Mode Logic restored
                           if (isTranquilMode) {
-                            /* ... same logic ... */
+                            textDisplay = name; // Only show name, hide quantity
+                          } else {
+                            textDisplay = (isHeaderItem || qty.isEmpty)
+                                ? name
+                                : "$name ($qty)";
                           }
 
-                          String textDisplay = (isHeaderItem || qty.isEmpty)
-                              ? name
-                              : "$name ($qty)";
-
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 2),
+                            padding: const EdgeInsets.only(bottom: 4),
                             child: Text(
                               textDisplay,
                               style: TextStyle(
-                                fontSize: 14,
-                                height: 1.2,
+                                fontSize: 16, // [FIX] Bigger font
+                                height: 1.3,
                                 color: isSwapped
-                                    ? Colors.blueGrey
+                                    ? Colors.blueGrey[700]
                                     : Colors.black87,
                                 fontWeight: (isHeaderItem && !isSwapped)
                                     ? FontWeight.w600
@@ -194,30 +216,27 @@ class MealCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Compact Actions
+                    // Actions
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (cadCode > 0)
                           SizedBox(
-                            width: 32,
-                            height: 32,
+                            width: 40, // [FIX] Bigger touch target
+                            height: 40,
                             child: IconButton(
-                              icon: const Icon(Icons.swap_horiz, size: 18),
+                              icon: const Icon(Icons.swap_horiz, size: 22),
                               color: Colors.blueGrey,
-                              padding: EdgeInsets.zero,
                               onPressed: () => onSwap(swapKey, cadCode),
                             ),
                           ),
                         if (isToday)
                           SizedBox(
-                            width: 32,
-                            height: 32,
+                            width: 40,
+                            height: 40,
                             child: IconButton(
-                              icon: const Icon(Icons.check, size: 18),
+                              icon: const Icon(Icons.check, size: 22),
                               color: Colors.green,
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
                               onPressed: () {
                                 Provider.of<DietProvider>(
                                   context,
