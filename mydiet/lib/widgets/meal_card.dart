@@ -13,6 +13,52 @@ class MealCard extends StatelessWidget {
   final Function(String key, int currentCad) onSwap;
   final Function(int index, String name, String qty)? onEdit;
 
+  // [FIX] Relax Mode WhiteList (Italian)
+  static const Set<String> _relaxableFoods = {
+    'mela',
+    'pera',
+    'banana',
+    'arancia',
+    'mandarino',
+    'kiwi',
+    'ananas',
+    'fragole',
+    'ciliegie',
+    'albicocche',
+    'pesche',
+    'anguria',
+    'melone',
+    'uva',
+    'prugne',
+    'limone',
+    'zucchine',
+    'melanzane',
+    'peperoni',
+    'pomodori',
+    'insalata',
+    'lattuga',
+    'rucola',
+    'spinaci',
+    'bieta',
+    'cicoria',
+    'cavolo',
+    'broccoli',
+    'cavolfiore',
+    'fagiolini',
+    'asparagi',
+    'carciofi',
+    'finocchi',
+    'sedano',
+    'carote',
+    'cetrioli',
+    'zucca',
+    'patate',
+    'cipolla',
+    'aglio',
+    'verdura',
+    'frutta',
+  };
+
   const MealCard({
     super.key,
     required this.day,
@@ -63,16 +109,11 @@ class MealCard extends StatelessWidget {
     int globalIndex = 0;
 
     return Card(
-      elevation: 2, // Slightly increased elevation
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ), // Rounder
-      margin: const EdgeInsets.symmetric(
-        vertical: 8,
-        horizontal: 12,
-      ), // [FIX] Bigger margin
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: Padding(
-        padding: const EdgeInsets.all(16.0), // [FIX] Bigger padding
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -80,7 +121,7 @@ class MealCard extends StatelessWidget {
             Text(
               mealName.toUpperCase(),
               style: TextStyle(
-                fontSize: 14, // [FIX] Larger Header
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey[700],
                 letterSpacing: 1.2,
@@ -111,7 +152,7 @@ class MealCard extends StatelessWidget {
               String swapKey = "${day}_${mealName}_group_$groupIndex";
               bool isSwapped = activeSwaps.containsKey(swapKey);
 
-              // Decide colors based on Tranquil Mode
+              // Colors
               Color bgColor = Colors.grey.withOpacity(0.05);
               Color? borderColor;
               if (!isTranquilMode) {
@@ -145,9 +186,7 @@ class MealCard extends StatelessWidget {
               }
 
               return Container(
-                margin: const EdgeInsets.only(
-                  bottom: 12,
-                ), // [FIX] More spacing between dishes
+                margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 10,
@@ -171,7 +210,7 @@ class MealCard extends StatelessWidget {
                               ? Icons.check_circle_outline
                               : Icons.circle_outlined,
                           color: isAvailable ? Colors.green : Colors.grey[400],
-                          size: 20, // [FIX] Bigger icon
+                          size: 20,
                         ),
                       ),
 
@@ -185,11 +224,22 @@ class MealCard extends StatelessWidget {
                           String qty = item['qty']?.toString() ?? "";
                           bool isHeaderItem = (qty == "N/A" || qty.isEmpty);
 
-                          String textDisplay;
-
-                          // [FIX] Tranquil Mode Logic restored
+                          // [FIX] Relax Mode: Only hide quantities for specific foods
+                          bool shouldHideQty = false;
                           if (isTranquilMode) {
-                            textDisplay = name; // Only show name, hide quantity
+                            // Check partial match in whitelist
+                            String cleanName = name.toLowerCase();
+                            for (var w in _relaxableFoods) {
+                              if (cleanName.contains(w)) {
+                                shouldHideQty = true;
+                                break;
+                              }
+                            }
+                          }
+
+                          String textDisplay;
+                          if (shouldHideQty) {
+                            textDisplay = name; // Hide Qty
                           } else {
                             textDisplay = (isHeaderItem || qty.isEmpty)
                                 ? name
@@ -201,7 +251,7 @@ class MealCard extends StatelessWidget {
                             child: Text(
                               textDisplay,
                               style: TextStyle(
-                                fontSize: 16, // [FIX] Bigger font
+                                fontSize: 16,
                                 height: 1.3,
                                 color: isSwapped
                                     ? Colors.blueGrey[700]
@@ -222,7 +272,7 @@ class MealCard extends StatelessWidget {
                       children: [
                         if (cadCode > 0)
                           SizedBox(
-                            width: 40, // [FIX] Bigger touch target
+                            width: 40,
                             height: 40,
                             child: IconButton(
                               icon: const Icon(Icons.swap_horiz, size: 22),

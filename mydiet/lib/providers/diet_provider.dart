@@ -107,14 +107,13 @@ class DietProvider extends ChangeNotifier {
     int count = 0;
     try {
       List<String> allowedFoods = _extractAllowedFoods();
-
       final items = await _repository.scanReceipt(path, allowedFoods);
 
       for (var item in items) {
         if (item is Map && item.containsKey('name')) {
           String rawQty = item['quantity']?.toString() ?? "1";
 
-          // [FIX] Parse unit and quantity correctly from receipt string
+          // [FIX] Smart Parsing for Receipts to prevent "600 pz" instead of "600 g"
           double qty = _parseQty(rawQty);
           String unit = 'pz';
           String lowerRaw = rawQty.toLowerCase();
@@ -125,13 +124,15 @@ class DietProvider extends ChangeNotifier {
           } else if (lowerRaw.contains('mg')) {
             unit = 'mg';
           } else if (lowerRaw.contains('g')) {
-            // catch 'g' but not 'kg' if checked strictly
             unit = 'g';
           } else if (lowerRaw.contains('ml')) {
             unit = 'ml';
           } else if (lowerRaw.contains('l') && !lowerRaw.contains('ml')) {
             qty *= 1000;
             unit = 'ml';
+          } else if (lowerRaw.contains('vasetto') ||
+              lowerRaw.contains('vasetti')) {
+            unit = 'vasetto';
           }
 
           addPantryItem(item['name'], qty, unit);
@@ -160,7 +161,6 @@ class DietProvider extends ChangeNotifier {
     if (index != -1) {
       _pantryItems[index].quantity += qty;
     } else {
-      // Capitalize first letter for display
       String displayName = name.trim();
       if (displayName.isNotEmpty) {
         displayName =
@@ -175,55 +175,118 @@ class DietProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // --- [FIX] Correct Consumption of Swapped Meals ---
   void consumeMeal(String day, String mealType, int dishIndex) {
     if (_dietData == null || _dietData![day] == null) return;
 
     final meals = _dietData![day][mealType];
     if (meals == null || meals is! List || dishIndex >= meals.length) return;
 
-    // Check if this meal is swapped - Consumption needs to know about swaps too?
-    // Usually consumption is done via the checkmark which consumes the *displayed* items.
-    // The current UI passes the *original* index.
-    // Ideally, we should consume the SWAP ingredients if swapped.
+    // 1. Identify Group Index to find the Swap Key
+    int groupIndex = -1;
+    int currentGId = 0;
+    List<int> currentGroup = [];
 
-    // NOTE: This logic assumes we consume the ORIGINAL if no swap logic is passed here.
-    // However, to keep it simple, if the UI shows the swap, we should probably handle it there.
-    // For now, let's stick to standard consumption logic, but improve the unit matching.
+    // Grouping logic matching MealCard
+    List<dynamic> allDishes = List.from(meals);
+    for (int i = 0; i < allDishes.length; i++) {
+      final d = allDishes[i];
+      String q = d['qty']?.toString() ?? "";
+      bool isHeader = (q == "N/A");
 
-    final dish = meals[dishIndex];
+      if (isHeader) {
+        if (currentGroup.isNotEmpty) {
+          if (currentGroup.contains(dishIndex)) {
+            groupIndex = currentGId;
+            break;
+          }
+          currentGId++;
+        }
+        currentGroup = [i];
+      } else {
+        if (currentGroup.isNotEmpty)
+          currentGroup.add(i);
+        else
+          currentGroup = [i];
+      }
+    }
+    if (groupIndex == -1 && currentGroup.contains(dishIndex)) {
+      groupIndex = currentGId;
+    }
 
-    if (dish['ingredients'] != null &&
-        (dish['ingredients'] as List).isNotEmpty) {
-      for (var ing in dish['ingredients']) {
-        final iName = ing['name'].toString();
-        final iQtyRaw = ing['qty'].toString();
-        consumeSmart(iName, iQtyRaw);
+    // 2. Check for Active Swap
+    String swapKey = "${day}_${mealType}_group_$groupIndex";
+
+    if (_activeSwaps.containsKey(swapKey)) {
+      // --- CONSUME SWAP INGREDIENTS ---
+      final swap = _activeSwaps[swapKey]!;
+
+      if (swap.swappedIngredients != null &&
+          swap.swappedIngredients!.isNotEmpty) {
+        for (var ing in swap.swappedIngredients!) {
+          consumeSmart(ing['name'].toString(), ing['qty'].toString());
+        }
+      } else {
+        String fullQty = swap.qty;
+        if (swap.unit.isNotEmpty) fullQty += " ${swap.unit}";
+        consumeSmart(swap.name, fullQty);
       }
     } else {
-      consumeSmart(dish['name'], dish['qty'] ?? '1');
+      // --- CONSUME ORIGINAL DISH INGREDIENTS ---
+      final dish = meals[dishIndex];
+      if (dish['ingredients'] != null &&
+          (dish['ingredients'] as List).isNotEmpty) {
+        for (var ing in dish['ingredients']) {
+          consumeSmart(ing['name'].toString(), ing['qty'].toString());
+        }
+      } else {
+        consumeSmart(dish['name'], dish['qty'] ?? '1');
+      }
     }
   }
 
   void consumeSmart(String name, String rawQtyString) {
     double qtyToEat = _parseQty(rawQtyString);
-    String unit = rawQtyString.toLowerCase().contains('g') ? 'g' : 'pz';
-    if (rawQtyString.toLowerCase().contains('ml')) unit = 'ml';
+    String unit = 'pz';
+    String lower = rawQtyString.toLowerCase();
+
+    // [FIX] Enhanced parsing to catch units before falling back to 'pz'
+    if (lower.contains('kg')) {
+      qtyToEat *= 1000;
+      unit = 'g';
+    } else if (lower.contains('mg')) {
+      unit = 'mg';
+    } else if (lower.contains('g')) {
+      unit = 'g';
+    } else if (lower.contains('ml')) {
+      unit = 'ml';
+    } else if (lower.contains('l')) {
+      qtyToEat *= 1000;
+      unit = 'ml';
+    } else if (lower.contains('cucchiain')) {
+      unit = 'cucchiaini';
+    } else if (lower.contains('vasett')) {
+      unit = 'vasetto';
+    } else if (lower.contains('fett')) {
+      unit = 'fette';
+    }
+
     consumeItem(name, qtyToEat, unit);
   }
 
-  // --- [FIX] SMARTER CONSUMPTION & UNIT EQUIVALENCE ---
+  // --- [FIX] Smart Unit Matching & Quantity Logic ---
   void consumeItem(String name, double qty, String unit) {
     final searchName = name.trim().toLowerCase();
     final searchUnit = unit.trim().toLowerCase();
 
-    // Strategy 1: Exact Match (Name + Unit)
+    // 1. Exact Match
     int index = _pantryItems.indexWhere(
       (p) =>
           p.name.toLowerCase() == searchName &&
           p.unit.toLowerCase() == searchUnit,
     );
 
-    // Strategy 2: Fuzzy Name Match
+    // 2. Fuzzy Name Match
     if (index == -1) {
       index = _pantryItems.indexWhere((p) {
         final pName = p.name.toLowerCase();
@@ -233,32 +296,31 @@ class DietProvider extends ChangeNotifier {
 
     if (index != -1) {
       var item = _pantryItems[index];
-
-      double qtyToSubtract = qty;
       final pUnit = item.unit.toLowerCase();
 
-      // [FIX] Unit Equivalence Logic
-      bool unitsMatch = pUnit == searchUnit;
+      double qtyToSubtract = qty;
 
-      // If units don't match strict string, check equivalents
-      if (!unitsMatch) {
-        bool isPz = pUnit == 'pz' || pUnit == '' || pUnit == 'pezzi';
-        bool targetIsPz =
-            searchUnit == 'pz' ||
-            searchUnit == '' ||
-            searchUnit == 'vasetto' ||
-            searchUnit == 'barattolo';
+      // [FIX] Unit Compatibility Logic
+      bool isWeight =
+          (pUnit == 'g' || pUnit == 'kg' || pUnit == 'ml' || pUnit == 'l');
+      bool targetIsWeight =
+          (searchUnit == 'g' ||
+          searchUnit == 'kg' ||
+          searchUnit == 'ml' ||
+          searchUnit == 'l');
 
-        // 1 pz in fridge ~ 1 vasetto requested
-        if (isPz && targetIsPz) {
-          unitsMatch = true;
-        }
-        // 100g requested vs 1 pz in fridge -> Just take 1 pz
-        else if (isPz && searchUnit == 'g') {
+      if (pUnit != searchUnit) {
+        if (isWeight && targetIsWeight) {
+          // Basic gram/ml matching. If units differ (e.g. g vs ml), fallback to 1.0.
+          // Usually consumeSmart normalizes kg->g, l->ml, so this is rare.
           qtyToSubtract = 1.0;
         }
-        // 1 pz requested vs 100g in fridge -> Logic unclear, assume 1 unit subtraction?
-        // For now, if mismatch persists, fallback to 1.0
+        // [FIX] If BOTH are Countable (pz, vasetto, cucchiaini, fette), TRUST THE QTY
+        // This fixes: "2 cucchiaini" removing 1. "2 fette" removing 1.
+        else if (!isWeight && !targetIsWeight) {
+          qtyToSubtract = qty;
+        }
+        // Mixed (1 pz vs 100g). Fallback to 1.0 (Safety)
         else {
           qtyToSubtract = 1.0;
         }
@@ -285,7 +347,6 @@ class DietProvider extends ChangeNotifier {
     }
   }
 
-  // --- [FIX] AVAILABILITY CHECK WITH SWAPS SUPPORT ---
   void _recalcAvailability() {
     if (_dietData == null) return;
 
@@ -327,15 +388,14 @@ class DietProvider extends ChangeNotifier {
 
         List<dynamic> dishes = List.from(mealsOfDay[mType]);
 
-        // Replicate grouping logic to identify swaps
+        // Grouping to identify Swaps
         List<List<int>> groups = [];
         List<int> currentGroupIndices = [];
 
         for (int i = 0; i < dishes.length; i++) {
           final d = dishes[i];
           String qty = d['qty']?.toString() ?? "";
-          bool isHeader = qty == "N/A";
-          if (isHeader) {
+          if (qty == "N/A") {
             if (currentGroupIndices.isNotEmpty)
               groups.add(List.from(currentGroupIndices));
             currentGroupIndices = [i];
@@ -343,15 +403,12 @@ class DietProvider extends ChangeNotifier {
             if (currentGroupIndices.isNotEmpty)
               currentGroupIndices.add(i);
             else
-              groups.add([
-                i,
-              ]); // Should not happen often if structured correctly
+              groups.add([i]);
           }
         }
         if (currentGroupIndices.isNotEmpty)
           groups.add(List.from(currentGroupIndices));
 
-        // Process Groups
         for (int gIdx = 0; gIdx < groups.length; gIdx++) {
           List<int> indices = groups[gIdx];
           if (indices.isEmpty) continue;
@@ -360,7 +417,6 @@ class DietProvider extends ChangeNotifier {
           bool isSwapped = _activeSwaps.containsKey(swapKey);
 
           if (isSwapped) {
-            // CHECK SWAP INGREDIENTS
             final swap = _activeSwaps[swapKey]!;
             List<dynamic> swapItems = [];
             if (swap.swappedIngredients != null &&
@@ -378,17 +434,13 @@ class DietProvider extends ChangeNotifier {
                 groupCovered = false;
               }
             }
-
-            // Mark all indices in this group as covered/not covered based on the swap
             for (int originalIdx in indices) {
               newMap["${day}_${mType}_$originalIdx"] = groupCovered;
             }
           } else {
-            // CHECK ORIGINAL INGREDIENTS
             for (int i in indices) {
               final dish = dishes[i];
               bool isCovered = true;
-
               List<dynamic> itemsToCheck = [];
               if (dish['ingredients'] != null &&
                   (dish['ingredients'] as List).isNotEmpty) {
@@ -419,7 +471,6 @@ class DietProvider extends ChangeNotifier {
   ) {
     String iName = item['name'].toString().trim().toLowerCase();
     double iQty = _parseQty(item['qty'].toString());
-    // Naive unit check for simulation (assuming grams vs pieces logic)
     bool isGramRequest = iQty > 20;
 
     String? foundKey;
@@ -432,15 +483,14 @@ class DietProvider extends ChangeNotifier {
 
     if (foundKey != null && fridge[foundKey]! > 0) {
       double sub = iQty;
-      // Simulation fallback: if fridge has < 10 (likely pieces) and request > 20 (likely g), take 1
+      // Simulation fallback for grams vs pz
       if (fridge[foundKey]! < 10 && isGramRequest) sub = 1.0;
 
       if (fridge[foundKey]! >= sub) {
         fridge[foundKey] = fridge[foundKey]! - sub;
         return true;
       } else {
-        // Partial stock -> Missing
-        fridge[foundKey] = 0; // Consume what's left
+        fridge[foundKey] = 0;
         return false;
       }
     }
