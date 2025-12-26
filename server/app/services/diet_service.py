@@ -4,6 +4,7 @@ import typing_extensions as typing
 import json
 import pdfplumber
 import os
+import re
 from app.core.config import settings
 
 # --- SCHEMI DATI ---
@@ -47,7 +48,6 @@ class DietParser:
             self.client = None
         else:
             clean_key = api_key.strip().replace('"', '').replace("'", "")
-            # [FIX] Initialize new Client
             self.client = genai.Client(api_key=clean_key)
 
         self.system_instruction = """
@@ -115,7 +115,6 @@ class DietParser:
             </source_document>
             """
 
-            # [FIX] New generate_content syntax
             response = self.client.models.generate_content(
                 model=model_name,
                 contents=prompt,
@@ -126,12 +125,15 @@ class DietParser:
                 )
             )
             
-            # Helper to safely parse response
-            if hasattr(response, 'text') and response.text:
-                return json.loads(response.text)
-            elif hasattr(response, 'parsed'):
-                 # If the SDK auto-parses to dict based on TypedDict schema
+            # [FIX] Prioritize structured parsing and handle text fallback safely
+            if hasattr(response, 'parsed') and response.parsed:
                 return response.parsed
+            elif hasattr(response, 'text') and response.text:
+                clean_text = response.text.strip()
+                # Remove Markdown code blocks if present
+                if clean_text.startswith("```"):
+                    clean_text = re.sub(r"^```json\s*|\s*```$", "", clean_text, flags=re.MULTILINE)
+                return json.loads(clean_text)
             else:
                 raise ValueError("Risposta vuota da Gemini")
 

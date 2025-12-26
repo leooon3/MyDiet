@@ -6,7 +6,7 @@ import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../models/pantry_item.dart';
 import '../models/active_swap.dart';
-import '../services/api_client.dart'; // [NEW] Needed for Exception types
+import '../services/api_client.dart';
 
 class DietProvider extends ChangeNotifier {
   final DietRepository _repository;
@@ -24,7 +24,7 @@ class DietProvider extends ChangeNotifier {
   // UI States
   bool _isLoading = false;
   bool _isTranquilMode = false;
-  String? _error; // [NEW] Error tracking
+  String? _error;
 
   // Getters
   Map<String, dynamic>? get dietData => _dietData;
@@ -73,29 +73,25 @@ class DietProvider extends ChangeNotifier {
         debugPrint("FCM Warning: $e");
       }
 
-      // Repository uses the improved ApiClient with retries
       final result = await _repository.uploadDiet(path, fcmToken: token);
 
       _dietData = result.plan;
       _substitutions = result.substitutions;
 
-      // 1. Save Local
       await _storage.saveDiet({
         'plan': _dietData,
         'substitutions': _substitutions,
       });
 
-      // 2. Save to Cloud History (if logged in)
       if (_auth.currentUser != null) {
         await _firestore.saveDietToHistory(_dietData!, _substitutions!);
       }
 
-      // Reset swaps on new diet
       _activeSwaps = {};
       await _storage.saveSwaps({});
     } catch (e) {
       _error = _mapError(e);
-      rethrow; // Pass to UI for SnackBar
+      rethrow;
     } finally {
       _setLoading(false);
     }
@@ -108,13 +104,17 @@ class DietProvider extends ChangeNotifier {
     try {
       List<String> allowedFoods = _extractAllowedFoods();
 
-      // Pass list to repository (which now handles JSON encoding)
       final items = await _repository.scanReceipt(path, allowedFoods);
 
       for (var item in items) {
-        // [FIX] Ensure item['name'] exists
         if (item is Map && item.containsKey('name')) {
-          addPantryItem(item['name'], 1.0, 'pz');
+          // [FIX] Extract quantity if available, otherwise default to 1.0
+          double qty = 1.0;
+          if (item['quantity'] != null) {
+            qty = double.tryParse(item['quantity'].toString()) ?? 1.0;
+          }
+
+          addPantryItem(item['name'], qty, 'pz');
           count++;
         }
       }

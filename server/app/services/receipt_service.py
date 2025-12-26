@@ -31,15 +31,17 @@ class ReceiptScanner:
         self.allowed_foods_str = ", ".join([str(f).lower().strip() for f in allowed_foods_list if f])
         print(f"[INFO] Receipt Context: {len(allowed_foods_list)} allowed foods loaded for AI context.")
 
+        # [FIX] Relaxed rules to allow all food items while prioritizing the diet list
         self.system_instruction = """
         You are an AI assistant for a diet app. Your task is to analyze receipt text and extract purchased food items.
         
         CRITICAL RULES:
-        1. **Filter by Context**: match the extracted items against the provided 'ALLOWED FOODS LIST'.
-           - If an item on the receipt closely matches a food in the list (semantically or by name), include it using the name FROM THE LIST.
-           - If an item is NOT in the allowed list, IGNORE IT.
-        2. **Ignore Non-Food**: Ignore taxes, totals, discounts, store info, payment details.
-        3. **Output Format**: Return a strictly structured JSON with a list of items.
+        1. **Extract Food Items**: Identify and extract all clearly identifiable food and grocery items.
+        2. **Use Context for Cleanup**: You are provided with an 'ALLOWED FOODS LIST'. 
+           - If an item on the receipt matches a food in the list (even vaguely), prefer the naming from the list.
+           - If an item is NOT in the list but is clearly food, EXTRACT IT ANYWAY using its name from the receipt.
+        3. **Ignore Non-Food**: Strictly ignore taxes, totals, discounts, store info, payment details, and non-edible goods (detergents, etc.).
+        4. **Output Format**: Return a strictly structured JSON with a list of items.
         """
 
     def extract_text_from_file(self, file_path):
@@ -113,24 +115,20 @@ class ReceiptScanner:
             # 4. Parse Response
             found_items = []
             if hasattr(response, 'parsed') and response.parsed:
-                # The SDK automatically parses into the TypedDict structure
                 data = response.parsed
-                # data is expected to be a dict matching ReceiptAnalysis or the object directly
-                # Adjusting based on SDK behavior (usually returns a Pydantic model or dict)
+                # Handle both dict and object return types from SDK
                 items_list = data.get('items', []) if isinstance(data, dict) else data.items
                 
                 for item in items_list:
-                    # Normalize for Frontend
-                    # item might be a dict or object depending on Pydantic/TypedDict handling
                     name = item.get('name') if isinstance(item, dict) else item.name
                     qty = item.get('quantity') if isinstance(item, dict) else item.quantity
                     
                     if name:
-                        print(f"  ✅ MATCH: {name}")
+                        print(f"  ✅ MATCH: {name} (Qty: {qty})")
                         found_items.append({
                             "name": name,
-                            "quantity": 1.0, # Default to 1 for fridge logic, or parse 'qty' if needed
-                            "original_scan": name # We don't have the raw line anymore, using name
+                            "quantity": qty, 
+                            "original_scan": name 
                         })
             
             print(f"[SUCCESS] Extracted {len(found_items)} items.")
