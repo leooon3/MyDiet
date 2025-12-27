@@ -574,6 +574,11 @@ class DietProvider extends ChangeNotifier {
     }
   }
 
+  // [INSERISCI QUI IL NUOVO METODO]
+  Future<void> refreshAvailability() async {
+    await _recalcAvailability();
+  }
+
   // --- [FIX] Offload Calculation to Isolate ---
   Future<void> _recalcAvailability() async {
     if (_dietData == null) return;
@@ -619,7 +624,6 @@ class DietProvider extends ChangeNotifier {
     return "Errore imprevisto: $e";
   }
 
-  // ... (Other getters/setters unchanged) ...
   void loadHistoricalDiet(Map<String, dynamic> dietData) {
     _dietData = dietData['plan'];
     _substitutions = dietData['substitutions'];

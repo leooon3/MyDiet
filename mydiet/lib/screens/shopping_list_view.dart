@@ -36,6 +36,17 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     "Domenica",
   ];
 
+  final List<String> _orderedMealTypes = [
+    "Colazione",
+    "Seconda Colazione",
+    "Spuntino",
+    "Pranzo",
+    "Merenda",
+    "Cena",
+    "Spuntino Serale",
+    "Nell'Arco Della Giornata",
+  ];
+
   List<String> _getOrderedDays() {
     int todayIndex = DateTime.now().weekday - 1;
     if (todayIndex < 0 || todayIndex > 6) todayIndex = 0;
@@ -73,10 +84,18 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                         widget.dietData![day] as Map<String, dynamic>?;
                     if (dayPlan == null) return const SizedBox.shrink();
 
-                    final mealNames = dayPlan.keys.where((k) {
+                    List<String> mealNames = dayPlan.keys.where((k) {
                       var foods = dayPlan[k];
                       return foods is List && foods.isNotEmpty;
                     }).toList();
+
+                    mealNames.sort((a, b) {
+                      int idxA = _orderedMealTypes.indexOf(a);
+                      int idxB = _orderedMealTypes.indexOf(b);
+                      if (idxA == -1) idxA = 999;
+                      if (idxB == -1) idxB = 999;
+                      return idxA.compareTo(idxB);
+                    });
 
                     if (mealNames.isEmpty) return const SizedBox.shrink();
 
@@ -162,6 +181,10 @@ class _ShoppingListViewState extends State<ShoppingListView> {
 
   void _generateListFromSelection() {
     if (_selectedMealKeys.isEmpty) return;
+
+    // 1. Fase di Aggregazione (Nome + Nome = Somma)
+    // "Parmigiano" + "Parmigiano" = "Parmigiano" (somma)
+    // "Parmigiano" + "Parmigiano Grattugiato" = 2 entrate diverse
     Map<String, Map<String, dynamic>> neededItems = {};
 
     try {
@@ -209,9 +232,20 @@ class _ShoppingListViewState extends State<ShoppingListView> {
           }
 
           for (var food in itemsToAdd) {
-            String qtyStr = food['qty']?.toString() ?? "";
-            if (qtyStr == "N/A" && itemsToAdd.length > 1) continue;
-            _addToAggregator(neededItems, food['name'], qtyStr);
+            if (food['ingredients'] != null &&
+                (food['ingredients'] as List).isNotEmpty) {
+              for (var ing in food['ingredients']) {
+                String iName = ing['name']?.toString() ?? "";
+                String iQty = ing['qty']?.toString() ?? "";
+                if (iName.isNotEmpty) {
+                  _addToAggregator(neededItems, iName, iQty);
+                }
+              }
+            } else {
+              String qtyStr = food['qty']?.toString() ?? "";
+              if (qtyStr == "N/A" && itemsToAdd.length > 1) continue;
+              _addToAggregator(neededItems, food['name'], qtyStr);
+            }
           }
         }
       }
@@ -226,20 +260,63 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     List<String> newList = List.from(widget.shoppingList);
     int addedCount = 0;
 
+    // 2. Clone della Dispensa per il "Double Dipping Check"
+    // Questo permette a "Parmigiano" e "Parmigiano Grattugiato" di pescare
+    // sequenzialmente dallo stesso barattolo virtuale.
+    List<PantryItem> tempPantry = widget.pantryItems
+        .map(
+          (p) => PantryItem(name: p.name, quantity: p.quantity, unit: p.unit),
+        )
+        .toList();
+
     neededItems.forEach((name, data) {
       double neededQty = data['qty'];
       String unit = data['unit'];
       String cleanNameLower = name.trim().toLowerCase();
 
-      var pantryMatch = widget.pantryItems.where((p) {
+      // Cerca corrispondenza (Fuzzy Match) nella dispensa clonata
+      var pantryMatch = tempPantry.where((p) {
         String pName = p.name.trim().toLowerCase();
         return pName == cleanNameLower ||
             cleanNameLower.contains(pName) ||
             pName.contains(cleanNameLower);
       }).firstOrNull;
 
-      double existingQty = pantryMatch?.quantity ?? 0.0;
+      double existingQty = 0.0;
+
+      if (pantryMatch != null) {
+        existingQty = pantryMatch.quantity;
+        // Normalizzazione unità (Kg -> g, L -> ml)
+        if (pantryMatch.unit.toLowerCase() == 'kg' && unit.toLowerCase() == 'g')
+          existingQty *= 1000;
+        if (pantryMatch.unit.toLowerCase() == 'l' && unit.toLowerCase() == 'ml')
+          existingQty *= 1000;
+      }
+
       double finalQty = neededQty - existingQty;
+
+      // Aggiorna dispensa virtuale (CONSUMO)
+      if (pantryMatch != null) {
+        if (finalQty <= 0) {
+          // Ce n'era abbastanza. Riduciamo la dispensa temp di quanto consumato.
+          double consumed = neededQty;
+          // De-normalizzazione per salvataggio
+          if (pantryMatch.unit.toLowerCase() == 'kg' &&
+              unit.toLowerCase() == 'g')
+            consumed /= 1000;
+          if (pantryMatch.unit.toLowerCase() == 'l' &&
+              unit.toLowerCase() == 'ml')
+            consumed /= 1000;
+
+          pantryMatch.quantity = (pantryMatch.quantity - consumed).clamp(
+            0.0,
+            9999.0,
+          );
+        } else {
+          // Non bastava. Svuotiamo virtualmente il barattolo.
+          pantryMatch.quantity = 0.0;
+        }
+      }
 
       if (finalQty > 0) {
         String displayQty = finalQty % 1 == 0
@@ -248,7 +325,9 @@ class _ShoppingListViewState extends State<ShoppingListView> {
         String entry = (finalQty == 0 || unit.isEmpty)
             ? name
             : "$name ($displayQty $unit)";
-        if (!newList.any((e) => e.startsWith(name) || e == entry)) {
+
+        // Evita duplicati solo se esattamente identici (stesso nome e stessa qta calcolata)
+        if (!newList.any((e) => e == entry)) {
           newList.add(entry);
           addedCount++;
         }
@@ -285,7 +364,13 @@ class _ShoppingListViewState extends State<ShoppingListView> {
       unit = qtyStr;
     }
 
+    // Aggregazione Case-Insensitive ma nome-specifica
+    // "Parmigiano" != "Parmigiano Grattugiato" -> Restano separati qui
     String cleanName = name.trim();
+    if (cleanName.isNotEmpty) {
+      cleanName = "${cleanName[0].toUpperCase()}${cleanName.substring(1)}";
+    }
+
     if (agg.containsKey(cleanName)) {
       agg[cleanName]!['qty'] += qty;
       if (agg[cleanName]!['unit'] == "" && unit.isNotEmpty)
@@ -303,8 +388,6 @@ class _ShoppingListViewState extends State<ShoppingListView> {
       if (item.startsWith("OK_")) {
         String content = item.substring(3);
 
-        // [FIX] Relaxed Regex: Handles edited text more gracefully
-        // Matches "Name (100.0 g)" OR just "Name"
         final RegExp regExp = RegExp(
           r'^(.*?)(?:\s*\((\d+(?:[.,]\d+)?)\s*(.*)\))?$',
         );
@@ -324,6 +407,7 @@ class _ShoppingListViewState extends State<ShoppingListView> {
           }
           if (unitStr != null && unitStr.isNotEmpty) {
             unit = unitStr.trim();
+            if (unit.endsWith(')')) unit = unit.substring(0, unit.length - 1);
           }
         }
 

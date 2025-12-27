@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../widgets/meal_card.dart';
 import '../models/active_swap.dart';
 import '../models/pantry_item.dart';
+import '../providers/diet_provider.dart';
 
 class DietView extends StatelessWidget {
   final Map<String, dynamic>? dietData;
@@ -57,17 +59,18 @@ class DietView extends StatelessWidget {
 
     return TabBarView(
       controller: tabController,
-      children: days.map((day) => _buildDayList(day)).toList(),
+      children: days.map((day) => _buildDayList(context, day)).toList(),
     );
   }
 
-  Widget _buildDayList(String day) {
+  Widget _buildDayList(BuildContext context, String day) {
     final dayPlan = dietData![day];
     if (dayPlan == null) return const Center(child: Text("Nessun piano."));
 
     const mealOrder = [
       "Colazione",
       "Seconda Colazione",
+      "Spuntino", // Aggiunto per robustezza
       "Pranzo",
       "Merenda",
       "Cena",
@@ -89,31 +92,42 @@ class DietView extends StatelessWidget {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      physics: const BouncingScrollPhysics(),
-      itemCount: validMeals.length,
-      itemBuilder: (context, index) {
-        final mealName = validMeals[index];
-        final foods = dayPlan[mealName];
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: MealCard(
-            day: day,
-            isTranquilMode: isTranquilMode,
-            mealName: mealName,
-            foods: foods,
-            activeSwaps: activeSwaps,
-            onSwap: (String fullKey, int cad) {
-              onSwap(fullKey, cad);
-            },
-            onEdit: (int itemIndex, String name, String qty) {
-              onEdit(day, mealName, itemIndex, name, qty);
-            },
-          ),
-        );
+    // [FIX] Pull-to-refresh per aggiornare lo stato disponibilità (bordi verdi)
+    return RefreshIndicator(
+      onRefresh: () async {
+        await Provider.of<DietProvider>(
+          context,
+          listen: false,
+        ).refreshAvailability();
       },
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        itemCount: validMeals.length,
+        itemBuilder: (context, index) {
+          final mealName = validMeals[index];
+          final foods = dayPlan[mealName];
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: MealCard(
+              day: day,
+              isTranquilMode: isTranquilMode,
+              mealName: mealName,
+              foods: foods,
+              activeSwaps: activeSwaps,
+              onSwap: (String fullKey, int cad) {
+                onSwap(fullKey, cad);
+              },
+              onEdit: (int itemIndex, String name, String qty) {
+                onEdit(day, mealName, itemIndex, name, qty);
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 }

@@ -13,50 +13,40 @@ class MealCard extends StatelessWidget {
   final Function(String key, int currentCad) onSwap;
   final Function(int index, String name, String qty)? onEdit;
 
-  // Relax Mode WhiteList (Italian)
+  // [FIX] Lista Estesa con Olive, Funghi, Mais e Condimenti
   static const Set<String> _relaxableFoods = {
-    'mela',
-    'pera',
-    'banana',
-    'arancia',
-    'mandarino',
-    'kiwi',
-    'ananas',
-    'fragole',
-    'ciliegie',
-    'albicocche',
-    'pesche',
-    'anguria',
-    'melone',
-    'uva',
-    'prugne',
-    'limone',
-    'zucchine',
-    'melanzane',
-    'peperoni',
+    // Frutta
+    'mela', 'mele', 'pera', 'pere', 'banana', 'banane', 'arancia', 'arance',
+    'mandarino', 'mandarini', 'kiwi', 'ananas', 'fragola', 'fragole',
+    'ciliegia', 'ciliegie', 'albicocca', 'albicocche', 'pesca', 'pesche',
+    'anguria', 'melone', 'uva', 'prugna', 'prugne', 'limone', 'pompelmo',
+    'frutti di bosco', 'mirtilli', 'lamponi', 'more', 'cachi', 'fico', 'fichi',
+    'melograno', 'avocado', 'mango', 'papaya',
+
+    // Verdura e Ortaggi
+    'zucchina', 'zucchine', 'melanzana', 'melanzane', 'peperone', 'peperoni',
+    'pomodoro',
     'pomodori',
     'insalata',
     'lattuga',
     'rucola',
     'spinaci',
-    'bieta',
-    'cicoria',
-    'cavolo',
-    'broccoli',
-    'cavolfiore',
-    'fagiolini',
-    'asparagi',
-    'carciofi',
-    'finocchi',
-    'sedano',
-    'carote',
-    'cetrioli',
-    'zucca',
-    'patate',
-    'cipolla',
-    'aglio',
-    'verdura',
-    'frutta',
+    'spinacio',
+    'bieta', 'bietola', 'cicoria', 'cavolo', 'cavoli', 'verza', 'cappuccio',
+    'broccoli', 'broccolo', 'cavolfiore', 'fagiolino', 'fagiolini', 'asparago',
+    'asparagi', 'carciofo', 'carciofi', 'finocchio', 'finocchi', 'sedano',
+    'carota', 'carote', 'cetriolo', 'cetrioli', 'zucca', 'patata', 'patate',
+    'cipolla', 'cipolle', 'aglio', 'scalogno', 'porro', 'porri', 'ravanello',
+    'ravanelli', 'rapa', 'cime di rapa', 'radicchio', 'valeriana', 'indivia',
+    'fungo', 'funghi', 'oliva', 'olive', 'mais',
+
+    // Legumi
+    'fagioli', 'ceci', 'lenticchie', 'piselli', 'fave', 'soia', 'edamame',
+
+    // Condimenti e Generici
+    'olio', 'aceto', 'sale', 'pepe', 'spezie',
+    'verdura', 'verdure', 'frutta', 'frutto', 'ortaggi', 'minestrone',
+    'passato di verdure', 'vellutata', 'contorno',
   };
 
   const MealCard({
@@ -72,7 +62,6 @@ class MealCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check Day
     final italianDays = [
       "Lunedì",
       "Martedì",
@@ -88,7 +77,6 @@ class MealCard extends StatelessWidget {
       isToday = day.toLowerCase() == italianDays[todayIndex].toLowerCase();
     }
 
-    // Grouping Logic
     List<List<dynamic>> groupedFoods = [];
     List<dynamic> currentGroup = [];
     for (var food in foods) {
@@ -117,7 +105,6 @@ class MealCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Text(
               mealName.toUpperCase(),
               style: TextStyle(
@@ -140,7 +127,6 @@ class MealCard extends StatelessWidget {
               var header = group[0];
               bool isConsumed = header['consumed'] == true;
 
-              // Availability Logic
               final String availabilityKey =
                   "${day}_${mealName}_$currentGroupStart";
               final isAvailable =
@@ -155,13 +141,10 @@ class MealCard extends StatelessWidget {
               String swapKey = "${day}_${mealName}_group_$groupIndex";
               bool isSwapped = activeSwaps.containsKey(swapKey);
 
-              // [FIX 1] Logic Colors: Separate TranquilMode from Availability
-              // We want to see the border GREEN if available, even in Tranquil Mode.
               Color bgColor = Colors.grey.withOpacity(0.05);
               Color? borderColor;
 
               if (!isConsumed) {
-                // Previously checked !isTranquilMode here, causing the disappearance
                 borderColor = isAvailable
                     ? Colors.green.withOpacity(0.5)
                     : Colors.transparent;
@@ -207,7 +190,6 @@ class MealCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // [FIX 1] Status Icon: Show it even in Tranquil Mode if not consumed
                     if (!isConsumed)
                       Padding(
                         padding: const EdgeInsets.only(top: 4, right: 12),
@@ -220,7 +202,7 @@ class MealCard extends StatelessWidget {
                         ),
                       ),
 
-                    if (isConsumed) // Consumed tick works in both modes
+                    if (isConsumed)
                       Padding(
                         padding: const EdgeInsets.only(top: 4, right: 12),
                         child: Icon(
@@ -230,7 +212,6 @@ class MealCard extends StatelessWidget {
                         ),
                       ),
 
-                    // Text Content
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -240,11 +221,9 @@ class MealCard extends StatelessWidget {
                           String qty = item['qty']?.toString() ?? "";
                           bool isHeaderItem = (qty == "N/A" || qty.isEmpty);
 
-                          // [FIX 1] Tranquil Mode Logic: Hides TEXT QUANTITY only
                           bool shouldHideQty = false;
                           if (isTranquilMode) {
                             String cleanName = name.toLowerCase();
-                            // Check whitelist
                             for (var w in _relaxableFoods) {
                               if (cleanName.contains(w)) {
                                 shouldHideQty = true;
@@ -255,10 +234,8 @@ class MealCard extends StatelessWidget {
 
                           String textDisplay;
                           if (shouldHideQty) {
-                            // Relax Mode: Name only
                             textDisplay = name;
                           } else {
-                            // Normal Mode: Name + Qty
                             textDisplay = (isHeaderItem || qty.isEmpty)
                                 ? name
                                 : "$name ($qty)";
@@ -289,7 +266,6 @@ class MealCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Actions
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
