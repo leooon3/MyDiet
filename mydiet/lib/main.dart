@@ -8,11 +8,15 @@ import 'constants.dart';
 import 'repositories/diet_repository.dart';
 import 'providers/diet_provider.dart';
 import 'screens/splash_screen.dart';
-import 'guards/password_guard.dart'; // <--- IMPORT NUOVO
+import 'guards/password_guard.dart';
+import 'services/notification_service.dart'; // [IMPORT]
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // [NUOVO] Inizializza le notifiche qui
+  await NotificationService().init();
 
   runApp(
     MultiProvider(
@@ -59,7 +63,6 @@ class DietApp extends StatelessWidget {
           ),
         ),
       ),
-      // [MODIFICA] Builder con catena di controlli: Manutenzione -> Password
       builder: (context, child) {
         return MaintenanceGuard(child: PasswordGuard(child: child!));
       },

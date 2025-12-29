@@ -1,11 +1,17 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart'; // [NEW] Required for permissions
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'storage_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint("🌙 Background Notification: ${message.notification?.title}");
+}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -15,29 +21,24 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+
   bool _isInitialized = false;
 
   Future<void> init() async {
     if (_isInitialized) return;
 
-    // 1. Initialize Timezone Database
     tz.initializeTimeZones();
-
-    // 2. AUTO-DETECT DEVICE TIMEZONE
     try {
       final String timeZoneName = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(timeZoneName));
-      debugPrint("✅ Timezone detected: $timeZoneName");
     } catch (e) {
-      debugPrint("⚠️ Timezone Error: $e");
-      // Fallback only if detection fails
       tz.setLocalLocation(tz.getLocation('UTC'));
     }
 
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/launcher_icon');
 
-    // [NOTE] request...Permission: false allows us to ask manually later
     const DarwinInitializationSettings initializationSettingsDarwin =
         DarwinInitializationSettings(
           requestSoundPermission: false,
@@ -54,73 +55,102 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse details) {
-        debugPrint("Notification Tapped: ${details.payload}");
+        debugPrint("🔔 Notification Tapped: ${details.payload}");
       },
     );
 
+    await _setupFirebaseMessaging();
+
     _isInitialized = true;
+    debugPrint("✅ Notification Service Initialized (Local + Push)");
   }
 
-  /// Requests Notifications and Exact Alarm permissions.
-  /// Returns true if at least notifications were granted.
-  Future<bool> requestPermissions() async {
-    bool notificationsGranted = false;
+  Future<void> _setupFirebaseMessaging() async {
+    NotificationSettings settings = await _firebaseMessaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
-    if (Platform.isIOS) {
-      final bool? result = await flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin
-          >()
-          ?.requestPermissions(alert: true, badge: true, sound: true);
-      notificationsGranted = result ?? false;
-    } else if (Platform.isAndroid) {
-      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-          flutterLocalNotificationsPlugin
-              .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin
-              >();
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint('✅ Push Permissions Granted');
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        debugPrint('☀️ Foreground Message: ${message.notification?.title}');
+        if (message.notification != null) {
+          _showLocalNotification(
+            id: message.hashCode,
+            title: message.notification!.title ?? 'Nuova notifica',
+            body: message.notification!.body ?? '',
+          );
+        }
+      });
+    } else {
+      debugPrint('❌ Push Permissions Denied');
+    }
+  }
 
-      // 1. Request Notification Permission (Android 13+)
-      final bool? granted = await androidImplementation
-          ?.requestNotificationsPermission();
-      notificationsGranted = granted ?? false;
+  Future<String?> getFCMToken() async {
+    try {
+      return await _firebaseMessaging.getToken();
+    } catch (e) {
+      debugPrint("⚠️ Error getting FCM Token: $e");
+      return null;
+    }
+  }
 
-      // 2. Request Exact Alarm Permission (Required for precise scheduling)
-      // This is often a separate system dialog or setting.
+  Future<void> _showLocalNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'high_importance_channel',
+          'Avvisi Importanti',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(),
+    );
+
+    await flutterLocalNotificationsPlugin.show(id, title, body, details);
+  }
+
+  Future<void> requestPermissions() async {
+    if (Platform.isAndroid) {
       final status = await Permission.scheduleExactAlarm.status;
       if (status.isDenied) {
         await Permission.scheduleExactAlarm.request();
       }
     }
-    return notificationsGranted;
   }
 
-  // --- DYNAMIC SCHEDULING ---
+  // --- GESTIONE ALLARMI DINAMICI ---
 
   Future<void> scheduleAllMeals() async {
-    await cancelMealReminders();
+    await flutterLocalNotificationsPlugin.cancelAll();
 
     final storage = StorageService();
-    final times = await storage.loadMealTimes();
+    final alarms = await storage.loadAlarms();
 
-    await _scheduleMeal(
-      10,
-      "Colazione ☕",
-      "È ora di fare il pieno di energia!",
-      times["colazione"] ?? "08:00",
-    );
-    await _scheduleMeal(
-      11,
-      "Pranzo 🥗",
-      "Buon appetito! Segui il piano.",
-      times["pranzo"] ?? "13:00",
-    );
-    await _scheduleMeal(
-      12,
-      "Cena 🍽️",
-      "Chiudi la giornata con gusto.",
-      times["cena"] ?? "20:00",
-    );
+    debugPrint("⏰ Scheduling ${alarms.length} alarms...");
+
+    for (var alarm in alarms) {
+      int id = alarm['id'] is int
+          ? alarm['id']
+          : int.tryParse(alarm['id'].toString()) ?? 0;
+      String label = alarm['label'] ?? "Pasto";
+      String time = alarm['time'] ?? "00:00";
+      String body = alarm['body'] ?? "È ora di mangiare!";
+
+      await _scheduleMeal(id, label, body, time);
+    }
   }
 
   Future<void> _scheduleMeal(
@@ -133,17 +163,11 @@ class NotificationService {
       final parts = timeStr.split(":");
       final int hour = int.parse(parts[0]);
       final int minute = int.parse(parts[1]);
-
       await _scheduleDaily(id, title, body, hour, minute);
+      debugPrint("   -> Scheduled '$title' at $timeStr (ID: $id)");
     } catch (e) {
-      debugPrint("⚠️ Error parsing time $timeStr: $e");
+      debugPrint("⚠️ Error parsing time $timeStr for $title: $e");
     }
-  }
-
-  Future<void> cancelMealReminders() async {
-    await flutterLocalNotificationsPlugin.cancel(10);
-    await flutterLocalNotificationsPlugin.cancel(11);
-    await flutterLocalNotificationsPlugin.cancel(12);
   }
 
   Future<void> _scheduleDaily(
@@ -156,8 +180,8 @@ class NotificationService {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
           'meal_reminders_v2',
-          'Meal Reminders',
-          channelDescription: 'Reminders for your daily meals',
+          'Promemoria Pasti',
+          channelDescription: 'Ricorda i tuoi pasti giornalieri',
           importance: Importance.max,
           priority: Priority.high,
         );
@@ -206,7 +230,6 @@ class NotificationService {
       hour,
       minute,
     );
-
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }

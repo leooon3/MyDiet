@@ -53,6 +53,57 @@ class StorageService {
     );
   }
 
+  // --- [FIXED] GESTIONE ALLARMI DINAMICI ---
+
+  /// Carica la lista degli allarmi. Restituisce i default se null o VUOTA.
+  Future<List<Map<String, dynamic>>> loadAlarms() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? raw = prefs.getString('custom_alarms');
+
+    // Lista di default definita qui per riutilizzo
+    final defaultAlarms = [
+      {
+        'id': 10,
+        'label': 'Colazione ☕',
+        'time': '08:00',
+        'body': 'È ora di fare il pieno di energia!',
+      },
+      {
+        'id': 11,
+        'label': 'Pranzo 🥗',
+        'time': '13:00',
+        'body': 'Buon appetito! Segui il piano.',
+      },
+      {
+        'id': 12,
+        'label': 'Cena 🍽️',
+        'time': '20:00',
+        'body': 'Chiudi la giornata con gusto.',
+      },
+    ];
+
+    if (raw == null) {
+      return defaultAlarms;
+    }
+
+    try {
+      List<dynamic> decoded = jsonDecode(raw);
+      // [FIX CRITICO] Se la lista salvata è vuota, ricarica i default
+      if (decoded.isEmpty) {
+        return defaultAlarms;
+      }
+      return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+    } catch (e) {
+      return defaultAlarms;
+    }
+  }
+
+  Future<void> saveAlarms(List<Map<String, dynamic>> alarms) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('custom_alarms', jsonEncode(alarms));
+  }
+
+  // Retro-compatibilità (opzionale)
   Future<Map<String, String>> loadMealTimes() async {
     final prefs = await SharedPreferences.getInstance();
     String? raw = prefs.getString('meal_times');
@@ -71,7 +122,7 @@ class StorageService {
     await _storage.deleteAll();
   }
 
-  // --- [NEW] UNIT CONVERSIONS ---
+  // --- UNIT CONVERSIONS ---
 
   Future<Map<String, double>> loadConversions() async {
     final prefs = await SharedPreferences.getInstance();

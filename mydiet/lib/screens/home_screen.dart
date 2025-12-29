@@ -25,8 +25,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   late TabController _tabController;
   final AuthService _auth = AuthService();
-
-  // [FIX 1] FAIL SAFE: Default to 'user' (Restricted) so we don't accidentally show buttons
   String _userRole = 'user';
   bool _isLoadingRole = true;
 
@@ -50,15 +48,27 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       vsync: this,
     );
 
-    // [FIX 2] Listen for Auth Changes to fetch role reliability
-    // This ensures we fetch data even if the user isn't ready the exact millisecond initState runs.
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         _fetchUserRole(user.uid);
+        _saveFCMToken(user.uid);
       } else {
-        if (mounted) setState(() => _userRole = 'user'); // Reset on logout
+        if (mounted) setState(() => _userRole = 'user');
       }
     });
+  }
+
+  Future<void> _saveFCMToken(String uid) async {
+    try {
+      final token = await NotificationService().getFCMToken();
+      if (token != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'fcm_token': token,
+        });
+      }
+    } catch (e) {
+      debugPrint("FCM Token Error: $e");
+    }
   }
 
   Future<void> _fetchUserRole(String uid) async {
@@ -67,7 +77,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           .collection('users')
           .doc(uid)
           .get();
-
       if (mounted) {
         setState(() {
           if (doc.exists && doc.data() != null) {
@@ -75,22 +84,15 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 .toString()
                 .toLowerCase();
           } else {
-            // If doc missing, assume 'user' (safe) or 'independent' depending on your pref.
-            // Safe bet is 'user' until fixed by admin.
             _userRole = 'user';
           }
           _isLoadingRole = false;
         });
-        debugPrint("User Role Fetched: $_userRole");
       }
     } catch (e) {
-      debugPrint("Role Fetch Error: $e");
-      // On error, keep 'user' (safe)
       if (mounted) setState(() => _isLoadingRole = false);
     }
   }
-
-  // --- ACTIONS ---
 
   Future<void> _uploadDiet(BuildContext context) async {
     final provider = context.read<DietProvider>();
@@ -253,13 +255,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
+  // --- [FIXED & IMPROVED] UI ALLARMI ---
   Future<void> _openTimeSettings(BuildContext context) async {
     final storage = StorageService();
-    Map<String, String> times = await storage.loadMealTimes();
-
-    TimeOfDay tColazione = _parseTime(times["colazione"]!);
-    TimeOfDay tPranzo = _parseTime(times["pranzo"]!);
-    TimeOfDay tCena = _parseTime(times["cena"]!);
+    List<Map<String, dynamic>> alarms = await storage.loadAlarms();
 
     if (!mounted) return;
 
@@ -268,30 +267,160 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            void _addAlarm() {
+              setDialogState(() {
+                alarms.add({
+                  'id': DateTime.now().millisecondsSinceEpoch % 100000,
+                  'label': 'Spuntino',
+                  'time': '10:00',
+                  'body': 'Ricorda il tuo spuntino!',
+                });
+              });
+            }
+
+            void _removeAlarm(int index) {
+              setDialogState(() {
+                alarms.removeAt(index);
+              });
+            }
+
+            void _restoreDefaults() {
+              setDialogState(() {
+                alarms = [
+                  {
+                    'id': 10,
+                    'label': 'Colazione ☕',
+                    'time': '08:00',
+                    'body': 'È ora di fare il pieno di energia!',
+                  },
+                  {
+                    'id': 11,
+                    'label': 'Pranzo 🥗',
+                    'time': '13:00',
+                    'body': 'Buon appetito! Segui il piano.',
+                  },
+                  {
+                    'id': 12,
+                    'label': 'Cena 🍽️',
+                    'time': '20:00',
+                    'body': 'Chiudi la giornata con gusto.',
+                  },
+                ];
+              });
+            }
+
             return AlertDialog(
-              title: const Text("Orari Pasti ⏰"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
+              // Ingrandiamo un po' il dialog per farci stare tutto
+              insetPadding: const EdgeInsets.all(10),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildTimeRow(
-                    context,
-                    "Colazione",
-                    tColazione,
-                    (t) => setDialogState(() => tColazione = t),
-                  ),
-                  _buildTimeRow(
-                    context,
-                    "Pranzo",
-                    tPranzo,
-                    (t) => setDialogState(() => tPranzo = t),
-                  ),
-                  _buildTimeRow(
-                    context,
-                    "Cena",
-                    tCena,
-                    (t) => setDialogState(() => tCena = t),
+                  const Text("Allarmi"),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.restore, color: Colors.grey),
+                        onPressed: _restoreDefaults,
+                        tooltip: "Ripristina",
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.add_circle,
+                          color: AppColors.primary,
+                        ),
+                        onPressed: _addAlarm,
+                        tooltip: "Aggiungi",
+                      ),
+                    ],
                   ),
                 ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: alarms.isEmpty
+                    ? const Center(child: Text("Nessun allarme impostato."))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: alarms.length,
+                        itemBuilder: (context, index) {
+                          final alarm = alarms[index];
+                          final time = _parseTime(alarm['time'] ?? "08:00");
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      // LABEL
+                                      Expanded(
+                                        flex: 2,
+                                        child: TextFormField(
+                                          initialValue: alarm['label'],
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          decoration: const InputDecoration(
+                                            labelText: "Titolo",
+                                            isDense: true,
+                                            border: InputBorder.none,
+                                          ),
+                                          onChanged: (val) =>
+                                              alarm['label'] = val,
+                                        ),
+                                      ),
+                                      // TIME PICKER
+                                      TextButton.icon(
+                                        icon: const Icon(Icons.access_time),
+                                        label: Text(
+                                          "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
+                                          style: const TextStyle(fontSize: 16),
+                                        ),
+                                        onPressed: () async {
+                                          final picked = await showTimePicker(
+                                            context: context,
+                                            initialTime: time,
+                                          );
+                                          if (picked != null) {
+                                            setDialogState(() {
+                                              alarm['time'] =
+                                                  "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.close,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed: () => _removeAlarm(index),
+                                      ),
+                                    ],
+                                  ),
+                                  // BODY MESSAGE
+                                  TextFormField(
+                                    initialValue: alarm['body'],
+                                    decoration: const InputDecoration(
+                                      labelText: "Messaggio",
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      border: InputBorder.none,
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                    onChanged: (val) => alarm['body'] = val,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
               actions: [
                 TextButton(
@@ -301,20 +430,17 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 FilledButton(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    final newTimes = {
-                      "colazione": _formatTime(tColazione),
-                      "pranzo": _formatTime(tPranzo),
-                      "cena": _formatTime(tCena),
-                    };
-                    await storage.saveMealTimes(newTimes);
+                    await storage.saveAlarms(alarms);
+
                     final notifs = NotificationService();
                     await notifs.init();
-                    if (await notifs.requestPermissions()) {
-                      await notifs.scheduleAllMeals();
-                      if (mounted)
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Orari aggiornati!")),
-                        );
+                    await notifs.requestPermissions();
+                    await notifs.scheduleAllMeals();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Allarmi aggiornati!")),
+                      );
                     }
                   },
                   child: const Text("Salva"),
@@ -327,44 +453,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTimeRow(
-    BuildContext context,
-    String label,
-    TimeOfDay time,
-    Function(TimeOfDay) onChanged,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-          TextButton(
-            onPressed: () async {
-              final picked = await showTimePicker(
-                context: context,
-                initialTime: time,
-              );
-              if (picked != null) onChanged(picked);
-            },
-            child: Text(
-              "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   TimeOfDay _parseTime(String s) {
-    final parts = s.split(":");
-    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    try {
+      final parts = s.split(":");
+      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    } catch (e) {
+      return const TimeOfDay(hour: 8, minute: 0);
+    }
   }
-
-  String _formatTime(TimeOfDay t) =>
-      "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
-
-  // --- UI ---
 
   @override
   Widget build(BuildContext context) {
@@ -445,16 +541,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     DietProvider provider,
     ColorScheme colors,
   ) {
-    // [LOGIC] Only Independent or Admin can upload. User (Client) cannot.
     final bool canUpload = _userRole == 'independent' || _userRole == 'admin';
-
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           UserAccountsDrawerHeader(
             accountName: const Text("MyDiet"),
-            // Debug: Show role so we know what's happening
             accountEmail: Text(
               "${user?.email ?? "Ospite"}\n(Role: $_userRole)",
             ),
@@ -498,18 +591,15 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             ),
           ],
           const Divider(),
-
-          // Conditional Upload Button
           if (canUpload)
             ListTile(
               leading: const Icon(Icons.upload_file),
               title: const Text("Carica Dieta PDF"),
               onTap: () => _uploadDiet(context),
             ),
-
           ListTile(
-            leading: const Icon(Icons.access_time_filled),
-            title: const Text("Imposta Orari Pasti"),
+            leading: const Icon(Icons.notifications_active),
+            title: const Text("Gestisci Allarmi"),
             onTap: () {
               Navigator.pop(context);
               _openTimeSettings(context);
