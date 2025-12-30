@@ -152,6 +152,21 @@ class AdminRepository {
     }
   }
 
+  Future<void> unassignUser(String targetUid) async {
+    final token = await _getToken();
+    final response = await http.post(
+      Uri.parse('$_baseUrl/admin/unassign-user'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'target_uid': targetUid}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to unassign user: ${response.body}');
+    }
+  }
+
   Future<void> deleteUser(String uid) async {
     final token = await _getToken();
     final response = await http.delete(

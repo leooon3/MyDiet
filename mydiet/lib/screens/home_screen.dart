@@ -25,8 +25,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   late TabController _tabController;
   final AuthService _auth = AuthService();
-  String _userRole = 'user';
-  bool _isLoadingRole = true;
 
   final List<String> days = [
     "Lunedì",
@@ -50,10 +48,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
-        _fetchUserRole(user.uid);
         _saveFCMToken(user.uid);
-      } else {
-        if (mounted) setState(() => _userRole = 'user');
       }
     });
   }
@@ -68,29 +63,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       }
     } catch (e) {
       debugPrint("FCM Token Error: $e");
-    }
-  }
-
-  Future<void> _fetchUserRole(String uid) async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
-      if (mounted) {
-        setState(() {
-          if (doc.exists && doc.data() != null) {
-            _userRole = (doc.data()!['role'] ?? 'user')
-                .toString()
-                .toLowerCase();
-          } else {
-            _userRole = 'user';
-          }
-          _isLoadingRole = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoadingRole = false);
     }
   }
 
@@ -255,7 +227,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  // --- [FIXED & IMPROVED] UI ALLARMI ---
   Future<void> _openTimeSettings(BuildContext context) async {
     final storage = StorageService();
     List<Map<String, dynamic>> alarms = await storage.loadAlarms();
@@ -310,7 +281,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             }
 
             return AlertDialog(
-              // Ingrandiamo un po' il dialog per farci stare tutto
               insetPadding: const EdgeInsets.all(10),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -354,7 +324,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                 children: [
                                   Row(
                                     children: [
-                                      // LABEL
                                       Expanded(
                                         flex: 2,
                                         child: TextFormField(
@@ -371,7 +340,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                               alarm['label'] = val,
                                         ),
                                       ),
-                                      // TIME PICKER
                                       TextButton.icon(
                                         icon: const Icon(Icons.access_time),
                                         label: Text(
@@ -400,7 +368,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                       ),
                                     ],
                                   ),
-                                  // BODY MESSAGE
                                   TextFormField(
                                     initialValue: alarm['body'],
                                     decoration: const InputDecoration(
@@ -535,86 +502,103 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     DietProvider provider,
     ColorScheme colors,
   ) {
-    final bool canUpload = _userRole == 'independent' || _userRole == 'admin';
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          UserAccountsDrawerHeader(
-            accountName: const Text("MyDiet"),
-            accountEmail: Text(
-              "${user?.email ?? "Ospite"}\n(Role: $_userRole)",
-            ),
-            currentAccountPicture: CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.person, size: 40, color: colors.primary),
-            ),
-            decoration: BoxDecoration(color: colors.primary),
+    // --- REALTIME ROLE LISTENER ---
+    return StreamBuilder<DocumentSnapshot>(
+      stream: user != null
+          ? FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .snapshots()
+          : const Stream.empty(),
+      builder: (context, snapshot) {
+        String role = 'user'; // Default to user (no upload)
+        if (snapshot.hasData && snapshot.data!.exists) {
+          role =
+              (snapshot.data!.data() as Map<String, dynamic>)['role'] ?? 'user';
+        }
+
+        final bool canUpload = role == 'independent' || role == 'admin';
+
+        return Drawer(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              UserAccountsDrawerHeader(
+                accountName: const Text("MyDiet"),
+                accountEmail: Text("${user?.email ?? "Ospite"}\n(Role: $role)"),
+                currentAccountPicture: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.person, size: 40, color: colors.primary),
+                ),
+                decoration: BoxDecoration(color: colors.primary),
+              ),
+              if (user == null)
+                ListTile(
+                  leading: const Icon(Icons.login),
+                  title: const Text("Accedi / Registrati"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    );
+                  },
+                )
+              else ...[
+                ListTile(
+                  leading: const Icon(Icons.history),
+                  title: const Text("Cronologia Diete"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text("Esci"),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _auth.signOut();
+                    if (mounted) {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    }
+                  },
+                ),
+              ],
+              const Divider(),
+              // Dynamic Visibility
+              if (canUpload)
+                ListTile(
+                  leading: const Icon(Icons.upload_file),
+                  title: const Text("Carica Dieta PDF"),
+                  onTap: () => _uploadDiet(context),
+                ),
+              ListTile(
+                leading: const Icon(Icons.notifications_active),
+                title: const Text("Gestisci Allarmi"),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openTimeSettings(context);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text("Reset Dati Locali"),
+                onTap: () {
+                  provider.clearData();
+                  Navigator.pop(context);
+                },
+              ),
+            ],
           ),
-          if (user == null)
-            ListTile(
-              leading: const Icon(Icons.login),
-              title: const Text("Accedi / Registrati"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              },
-            )
-          else ...[
-            ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text("Cronologia Diete"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text("Esci"),
-              onTap: () async {
-                Navigator.pop(context);
-                await _auth.signOut();
-                if (mounted) {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  );
-                }
-              },
-            ),
-          ],
-          const Divider(),
-          if (canUpload)
-            ListTile(
-              leading: const Icon(Icons.upload_file),
-              title: const Text("Carica Dieta PDF"),
-              onTap: () => _uploadDiet(context),
-            ),
-          ListTile(
-            leading: const Icon(Icons.notifications_active),
-            title: const Text("Gestisci Allarmi"),
-            onTap: () {
-              Navigator.pop(context);
-              _openTimeSettings(context);
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.delete, color: Colors.red),
-            title: const Text("Reset Dati Locali"),
-            onTap: () {
-              provider.clearData();
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

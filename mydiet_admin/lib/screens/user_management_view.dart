@@ -249,10 +249,13 @@ class _UserManagementViewState extends State<UserManagementView> {
     );
   }
 
+  // --- ASSIGNMENT LOGIC ---
+
   Future<void> _assignUser(
     String targetUid,
     Map<String, String> nutritionists,
   ) async {
+    // Only for INDEPENDENT users
     String? selectedNutId;
     if (nutritionists.isNotEmpty) selectedNutId = nutritionists.keys.first;
 
@@ -306,6 +309,119 @@ class _UserManagementViewState extends State<UserManagementView> {
                 }
               },
               child: const Text("Assegna"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showManageAssignmentDialog(
+    String targetUid,
+    Map<String, String> nutritionists,
+  ) async {
+    // For ALREADY ASSIGNED users: Move or Unassign
+    String? selectedNutId;
+    if (nutritionists.isNotEmpty) selectedNutId = nutritionists.keys.first;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Gestisci Assegnazione"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Sposta utente ad un altro nutrizionista:",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: selectedNutId,
+                isExpanded: true,
+                items: nutritionists.entries
+                    .map(
+                      (e) =>
+                          DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    )
+                    .toList(),
+                onChanged: (v) => setDialogState(() => selectedNutId = v),
+                decoration: const InputDecoration(
+                  labelText: "Nuovo Nutrizionista",
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.person_off, color: Colors.red),
+                  label: const Text(
+                    "Rimuovi Assegnazione",
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    setState(() => _isLoading = true);
+                    try {
+                      await _repo.unassignUser(targetUid);
+                      if (mounted)
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Utente rimosso dal nutrizionista."),
+                          ),
+                        );
+                    } catch (e) {
+                      if (mounted)
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text("Errore: $e"),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                    } finally {
+                      if (mounted) setState(() => _isLoading = false);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Annulla"),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (selectedNutId == null) return;
+                Navigator.pop(ctx);
+                setState(() => _isLoading = true);
+                try {
+                  await _repo.assignUserToNutritionist(
+                    targetUid,
+                    selectedNutId!,
+                  );
+                  if (mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Utente trasferito!")),
+                    );
+                } catch (e) {
+                  if (mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Errore: $e"),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                } finally {
+                  if (mounted) setState(() => _isLoading = false);
+                }
+              },
+              child: const Text("Sposta"),
             ),
           ],
         ),
@@ -722,7 +838,8 @@ class _UserManagementViewState extends State<UserManagementView> {
                         (clients[idx].data() as Map)['first_name'] ?? 'Client',
                       ),
                       onEdit: _editUser,
-                      onAssign: null,
+                      onAssign: (uid) =>
+                          _showManageAssignmentDialog(uid, nutNameMap),
                       currentUserRole: _currentUserRole,
                       currentUserId: _currentUserId,
                       roleColor: _getRoleColor('user'),
@@ -864,7 +981,8 @@ class _UserCard extends StatelessWidget {
     bool canEdit =
         requiresPassChange &&
         (currentUserRole == 'admin' || createdBy == currentUserId);
-    bool canAssign = role == 'independent' && onAssign != null;
+    bool canAssign =
+        (role == 'independent' || role == 'user') && onAssign != null;
 
     return Card(
       child: Padding(
@@ -950,8 +1068,13 @@ class _UserCard extends StatelessWidget {
               children: [
                 if (canAssign)
                   IconButton(
-                    icon: const Icon(Icons.person_add, color: Colors.blue),
-                    tooltip: "Assegna a Nutrizionista",
+                    icon: Icon(
+                      role == 'user' ? Icons.manage_accounts : Icons.person_add,
+                      color: Colors.blue,
+                    ),
+                    tooltip: role == 'user'
+                        ? "Gestisci Assegnazione"
+                        : "Assegna a Nutrizionista",
                     onPressed: () => onAssign!(data['uid']),
                   ),
                 if (showDiet) ...[

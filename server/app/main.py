@@ -94,6 +94,9 @@ class AssignUserRequest(BaseModel):
     target_uid: str
     nutritionist_id: str
 
+class UnassignUserRequest(BaseModel):
+    target_uid: str
+
 class MaintenanceRequest(BaseModel):
     enabled: bool
     message: Optional[str] = None
@@ -321,19 +324,29 @@ async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_
 async def admin_assign_user(body: AssignUserRequest, requester_id: str = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
-        
-        # 1. Update Firestore (Change role to user, assign parent)
+        # Change role to user, assign parent
         db.collection('users').document(body.target_uid).update({
             'role': 'user',
             'parent_id': body.nutritionist_id,
-            'created_by': body.nutritionist_id, 
             'updated_at': firebase_admin.firestore.SERVER_TIMESTAMP
         })
-        
-        # 2. Update Auth Claims
         auth.set_custom_user_claims(body.target_uid, {'role': 'user'})
-        
         return {"message": "User assigned successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/unassign-user")
+async def admin_unassign_user(body: UnassignUserRequest, requester_id: str = Depends(verify_admin)):
+    try:
+        db = firebase_admin.firestore.client()
+        # Revert role to independent, remove parent
+        db.collection('users').document(body.target_uid).update({
+            'role': 'independent',
+            'parent_id': firestore.DELETE_FIELD,
+            'updated_at': firebase_admin.firestore.SERVER_TIMESTAMP
+        })
+        auth.set_custom_user_claims(body.target_uid, {'role': 'independent'})
+        return {"message": "User unassigned successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
