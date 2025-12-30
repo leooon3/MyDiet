@@ -12,7 +12,77 @@ class AdminRepository {
     return await FirebaseAuth.instance.currentUser?.getIdToken();
   }
 
-  // --- 1. USER MANAGEMENT ---
+  // --- MAINTENANCE & CONFIGURATION ---
+
+  Future<bool> getMaintenanceStatus() async {
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$_baseUrl/admin/config/maintenance'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['enabled'] ?? false;
+    }
+    return false;
+  }
+
+  // UPDATED: Supports custom message
+  Future<void> setMaintenanceStatus(bool enabled, {String? message}) async {
+    final token = await _getToken();
+    await http.post(
+      Uri.parse('$_baseUrl/admin/config/maintenance'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'enabled': enabled,
+        if (message != null) 'message': message,
+      }),
+    );
+  }
+
+  // UPDATED: Sends UTC time to fix timezone bugs
+  Future<void> scheduleMaintenance(DateTime date, bool notifyUsers) async {
+    final token = await _getToken();
+
+    String isoDate = date.toUtc().toIso8601String();
+    String formattedDate = DateFormat('EEEE, d MMM "at" HH:mm').format(date);
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/admin/schedule-maintenance'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'scheduled_time': isoDate,
+        'message':
+            "Scheduled Maintenance: The app will be unavailable on $formattedDate.",
+        'notify': notifyUsers,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to schedule: ${response.body}');
+    }
+  }
+
+  Future<void> cancelMaintenanceSchedule() async {
+    final token = await _getToken();
+    final response = await http.post(
+      Uri.parse('$_baseUrl/admin/cancel-maintenance'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to cancel: ${response.body}');
+    }
+  }
+
+  // --- USER MANAGEMENT & UPLOADS (UNCHANGED) ---
 
   Future<void> createUser({
     required String email,
@@ -36,10 +106,8 @@ class AdminRepository {
         'last_name': lastName,
       }),
     );
-
-    if (response.statusCode != 200) {
+    if (response.statusCode != 200)
       throw Exception('Failed to create user: ${response.body}');
-    }
   }
 
   Future<void> deleteUser(String uid) async {
@@ -48,10 +116,8 @@ class AdminRepository {
       Uri.parse('$_baseUrl/admin/delete-user/$uid'),
       headers: {'Authorization': 'Bearer $token'},
     );
-
-    if (response.statusCode != 200) {
+    if (response.statusCode != 200)
       throw Exception('Failed to delete user: ${response.body}');
-    }
   }
 
   Future<String> syncUsers() async {
@@ -60,27 +126,19 @@ class AdminRepository {
       Uri.parse('$_baseUrl/admin/sync-users'),
       headers: {'Authorization': 'Bearer $token'},
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['message'] ?? "Sync completato.";
-    } else {
-      throw Exception("Sync fallito: ${response.body}");
-    }
+    if (response.statusCode == 200)
+      return jsonDecode(response.body)['message'] ?? "Sync completato.";
+    throw Exception("Sync fallito: ${response.body}");
   }
-
-  // --- 2. FILE UPLOAD ---
 
   Future<void> uploadDietForUser(String targetUid, PlatformFile file) async {
     final token = await _getToken();
-    if (file.bytes == null) throw Exception("File corrotto o vuoto");
-
+    if (file.bytes == null) throw Exception("File corrotto");
     var request = http.MultipartRequest(
       'POST',
       Uri.parse('$_baseUrl/upload-diet/$targetUid'),
     );
     request.headers['Authorization'] = 'Bearer $token';
-
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
@@ -89,25 +147,19 @@ class AdminRepository {
         contentType: MediaType('application', 'pdf'),
       ),
     );
-
     final response = await request.send();
-
-    if (response.statusCode != 200) {
-      final respStr = await response.stream.bytesToString();
-      throw Exception('Upload failed: $respStr');
-    }
+    if (response.statusCode != 200)
+      throw Exception(await response.stream.bytesToString());
   }
 
   Future<void> uploadParserConfig(String targetUid, PlatformFile file) async {
     final token = await _getToken();
     if (file.bytes == null) throw Exception("File vuoto");
-
     var request = http.MultipartRequest(
       'POST',
       Uri.parse('$_baseUrl/admin/upload-parser/$targetUid'),
     );
     request.headers['Authorization'] = 'Bearer $token';
-
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
@@ -116,78 +168,8 @@ class AdminRepository {
         contentType: MediaType('text', 'plain'),
       ),
     );
-
     final response = await request.send();
-    if (response.statusCode != 200) {
-      final respStr = await response.stream.bytesToString();
-      throw Exception('Parser upload failed: $respStr');
-    }
-  }
-
-  // --- 3. CONFIGURATION & MAINTENANCE ---
-
-  Future<bool> getMaintenanceStatus() async {
-    final token = await _getToken();
-    final response = await http.get(
-      Uri.parse('$_baseUrl/admin/config/maintenance'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['enabled'] ?? false;
-    }
-    return false;
-  }
-
-  Future<void> setMaintenanceStatus(bool enabled) async {
-    final token = await _getToken();
-    await http.post(
-      Uri.parse('$_baseUrl/admin/config/maintenance'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'enabled': enabled}),
-    );
-  }
-
-  /// New Method: Schedule Maintenance and Notify Users
-  Future<void> scheduleMaintenance(DateTime date, bool notifyUsers) async {
-    final token = await _getToken();
-    String isoDate = date.toUtc().toIso8601String();
-    // Format: "Friday, 12 Oct at 14:30"
-    String formattedDate = DateFormat('EEEE, d MMM "at" HH:mm').format(date);
-
-    final response = await http.post(
-      Uri.parse('$_baseUrl/admin/schedule-maintenance'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'scheduled_time': isoDate,
-        'message':
-            "Scheduled Maintenance: The app will be unavailable on $formattedDate.",
-        'notify': notifyUsers,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to schedule maintenance: ${response.body}');
-    }
-  }
-
-  Future<void> cancelMaintenanceSchedule() async {
-    final token = await _getToken();
-
-    final response = await http.post(
-      Uri.parse('$_baseUrl/admin/cancel-maintenance'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to cancel schedule: ${response.body}');
-    }
+    if (response.statusCode != 200)
+      throw Exception(await response.stream.bytesToString());
   }
 }

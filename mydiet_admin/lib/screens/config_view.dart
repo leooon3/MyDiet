@@ -81,8 +81,14 @@ class _ConfigViewState extends State<ConfigView> {
   Future<void> _toggleMaintenance(bool value) async {
     setState(() => _isLoading = true);
     try {
-      await _repo.setMaintenanceStatus(value);
-      // No need to set state manually here, the stream will update it
+      // Define the message only if we are turning it ON
+      String? msg;
+      if (value == true) {
+        msg = "Emergency maintenance, we are working for you";
+      }
+
+      // Pass the message to the repository
+      await _repo.setMaintenanceStatus(value, message: msg);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
