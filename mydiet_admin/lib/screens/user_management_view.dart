@@ -930,6 +930,53 @@ class _UserHistoryScreen extends StatelessWidget {
 
   const _UserHistoryScreen({required this.targetUid, required this.userName});
 
+  void _deleteDiet(BuildContext context, DocumentReference ref) async {
+    bool confirm =
+        await showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text("Elimina Dieta"),
+            content: const Text("Questa azione è irreversibile. Confermi?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text("Annulla"),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text("Elimina"),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirm) {
+      try {
+        await ref.delete();
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Dieta eliminata")));
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Errore: $e"), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  void _viewDiet(BuildContext context, Map<String, dynamic> data) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => _DietDetailScreen(data: data)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -941,38 +988,116 @@ class _UserHistoryScreen extends StatelessWidget {
             .orderBy('uploadedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  "Errore database: ${snapshot.error}",
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
           if (!snapshot.hasData)
             return const Center(child: CircularProgressIndicator());
+
           final docs = snapshot.data!.docs;
           if (docs.isEmpty)
             return const Center(child: Text("Nessuna dieta precedente."));
 
-          return ListView.builder(
+          return ListView.separated(
             itemCount: docs.length,
+            separatorBuilder: (_, __) => const Divider(),
             itemBuilder: (ctx, i) {
               final data = docs[i].data() as Map<String, dynamic>;
               final date =
                   (data['uploadedAt'] as Timestamp?)?.toDate() ??
                   DateTime.now();
               return ListTile(
-                leading: const Icon(Icons.picture_as_pdf),
+                leading: const Icon(
+                  Icons.picture_as_pdf,
+                  color: Colors.blueAccent,
+                ),
                 title: Text(data['fileName'] ?? "Dieta"),
                 subtitle: Text(DateFormat('dd MMM yyyy HH:mm').format(date)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Visualizzazione dettagli non implementata in Admin",
-                      ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.visibility, color: Colors.green),
+                      tooltip: "Visualizza",
+                      onPressed: () => _viewDiet(context, data),
                     ),
-                  );
-                },
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      tooltip: "Elimina",
+                      onPressed: () => _deleteDiet(context, docs[i].reference),
+                    ),
+                  ],
+                ),
               );
             },
           );
         },
       ),
+    );
+  }
+}
+
+class _DietDetailScreen extends StatelessWidget {
+  final Map<String, dynamic> data;
+
+  const _DietDetailScreen({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final parsedData = data['parsedData'] as Map<String, dynamic>?;
+    final plan = parsedData?['plan'] as Map<String, dynamic>?;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(data['fileName'] ?? "Dettaglio")),
+      body: plan == null
+          ? const Center(child: Text("Dati dieta non validi o mancanti."))
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: plan.entries.map((entry) {
+                final day = entry.key;
+                final meals = entry.value as Map<String, dynamic>;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ExpansionTile(
+                    title: Text(
+                      day,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    children: meals.entries.map((mEntry) {
+                      final mealName = mEntry.key;
+                      final dishes = mEntry.value as List<dynamic>;
+                      return ListTile(
+                        title: Text(
+                          mealName,
+                          style: const TextStyle(
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: dishes.map((d) {
+                            final name = d['name'] ?? '-';
+                            final qty = d['qty']?.toString() ?? '';
+                            return Text(
+                              "• $name ${qty.isNotEmpty ? '($qty)' : ''}",
+                            );
+                          }).toList(),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              }).toList(),
+            ),
     );
   }
 }

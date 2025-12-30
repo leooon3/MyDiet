@@ -24,6 +24,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // [NEW] Diet History: Admin Full Access
+    match /diet_history/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
     // User Data
     match /users/{userId} {
       // Profile: Owner and Admin can Read. Only Backend can Write (create/delete).
