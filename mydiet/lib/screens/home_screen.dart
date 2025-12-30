@@ -467,71 +467,65 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     final provider = context.watch<DietProvider>();
     final colorScheme = Theme.of(context).colorScheme;
 
-    return StreamBuilder<User?>(
-      stream: _auth.authStateChanges,
-      builder: (context, snapshot) {
-        final user = snapshot.data;
-
-        return Stack(
-          children: [
-            Scaffold(
-              appBar: AppBar(
-                title: const Text("MyDiet"),
-                actions: [
-                  if (_currentIndex == 0)
-                    IconButton(
-                      icon: Icon(
-                        provider.isTranquilMode
-                            ? Icons.spa
-                            : Icons.spa_outlined,
-                      ),
-                      tooltip: "Modalità Relax",
-                      onPressed: provider.toggleTranquilMode,
-                    ),
-                ],
-                bottom: _currentIndex == 0
-                    ? TabBar(
-                        controller: _tabController,
-                        isScrollable: true,
-                        tabs: days
-                            .map(
-                              (d) => Tab(text: d.substring(0, 3).toUpperCase()),
-                            )
-                            .toList(),
-                      )
-                    : null,
-              ),
-              drawer: _buildDrawer(context, user, provider, colorScheme),
-              body: _buildBody(provider),
-              bottomNavigationBar: NavigationBar(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (i) => setState(() => _currentIndex = i),
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.calendar_today),
-                    label: 'Piano',
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            title: const Text("MyDiet"),
+            actions: [
+              if (_currentIndex == 0)
+                IconButton(
+                  icon: Icon(
+                    provider.isTranquilMode ? Icons.spa : Icons.spa_outlined,
                   ),
-                  NavigationDestination(
-                    icon: Icon(Icons.kitchen),
-                    label: 'Dispensa',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.shopping_cart),
-                    label: 'Lista',
-                  ),
-                ],
-              ),
-            ),
-            if (provider.isLoading)
-              Container(
-                color: Colors.black45,
-                child: const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
+                  tooltip: "Modalità Relax",
+                  onPressed: provider.toggleTranquilMode,
                 ),
+            ],
+            bottom: _currentIndex == 0
+                ? TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabs: days
+                        .map((d) => Tab(text: d.substring(0, 3).toUpperCase()))
+                        .toList(),
+                  )
+                : null,
+          ),
+          drawer: _buildDrawer(
+            context,
+            _auth.currentUser,
+            provider,
+            colorScheme,
+          ),
+          body: _buildBody(provider),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (i) => setState(() => _currentIndex = i),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.calendar_today),
+                label: 'Piano',
               ),
-          ],
-        );
-      },
+              NavigationDestination(
+                icon: Icon(Icons.kitchen),
+                label: 'Dispensa',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.shopping_cart),
+                label: 'Lista',
+              ),
+            ],
+          ),
+        ),
+        if (provider.isLoading)
+          Container(
+            color: Colors.black45,
+            child: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          ),
+      ],
     );
   }
 
@@ -563,7 +557,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               title: const Text("Accedi / Registrati"),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
+                Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                 );
@@ -584,9 +578,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text("Esci"),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                _auth.signOut();
+                await _auth.signOut();
+                if (mounted) {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  );
+                }
               },
             ),
           ],

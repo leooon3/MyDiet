@@ -159,33 +159,94 @@ class _UserManagementViewState extends State<UserManagementView> {
   }
 
   Future<void> _uploadParser(String targetUid) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['txt'],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ParserConfigScreen(targetUid: targetUid),
+      ),
     );
-    if (result != null && result.files.single.bytes != null) {
-      setState(() => _isLoading = true);
-      try {
-        await _repo.uploadParserConfig(targetUid, result.files.single);
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Parser caricato!"),
-              backgroundColor: Colors.green,
+  }
+
+  Future<void> _showUserHistory(String targetUid, String userName) async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            _UserHistoryScreen(targetUid: targetUid, userName: userName),
+      ),
+    );
+  }
+
+  Future<void> _editUser(
+    String uid,
+    String currentEmail,
+    String currentFirst,
+    String currentLast,
+  ) async {
+    final emailCtrl = TextEditingController(text: currentEmail);
+    final firstCtrl = TextEditingController(text: currentFirst);
+    final lastCtrl = TextEditingController(text: currentLast);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Modifica Account"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: firstCtrl,
+              decoration: const InputDecoration(labelText: "Nome"),
             ),
-          );
-      } catch (e) {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Errore parser: $e"),
-              backgroundColor: Colors.red,
+            const SizedBox(height: 8),
+            TextField(
+              controller: lastCtrl,
+              decoration: const InputDecoration(labelText: "Cognome"),
             ),
-          );
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
-    }
+            const SizedBox(height: 8),
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(labelText: "Email"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Annulla"),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() => _isLoading = true);
+              try {
+                await _repo.updateUser(
+                  uid,
+                  email: emailCtrl.text,
+                  firstName: firstCtrl.text,
+                  lastName: lastCtrl.text,
+                );
+                if (mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Utente aggiornato")),
+                  );
+              } catch (e) {
+                if (mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Errore: $e"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            child: const Text("Salva"),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showCreateUserDialog() async {
@@ -467,12 +528,11 @@ class _UserManagementViewState extends State<UserManagementView> {
     );
   }
 
-  /// Original Grid Layout (Used for Nutritionists to see their own clients)
   Widget _buildUserGrid(List<DocumentSnapshot> docs) {
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 400,
-        mainAxisExtent: 230,
+        mainAxisExtent: 240, // Increased height for extra buttons
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
       ),
@@ -483,7 +543,13 @@ class _UserManagementViewState extends State<UserManagementView> {
           onDelete: _deleteUser,
           onUploadDiet: _uploadDiet,
           onUploadParser: _uploadParser,
+          onHistory: (uid) => _showUserHistory(
+            uid,
+            (docs[index].data() as Map)['first_name'] ?? 'User',
+          ),
+          onEdit: _editUser,
           currentUserRole: _currentUserRole,
+          currentUserId: _currentUserId,
           roleColor: _getRoleColor(
             (docs[index].data() as Map<String, dynamic>)['role'] ?? 'user',
           ),
@@ -492,7 +558,6 @@ class _UserManagementViewState extends State<UserManagementView> {
     );
   }
 
-  /// Grouped List Layout for Admins
   Widget _buildAdminGroupedLayout(
     List<DocumentSnapshot> docs,
     Map<String, String> nutNameMap,
@@ -501,8 +566,7 @@ class _UserManagementViewState extends State<UserManagementView> {
     final admins = <DocumentSnapshot>[];
     final independents = <DocumentSnapshot>[];
     final nutritionistGroups = <String, List<DocumentSnapshot>>{};
-    final nutritionistDocs =
-        <String, DocumentSnapshot>{}; // The nutritionist themselves
+    final nutritionistDocs = <String, DocumentSnapshot>{};
 
     for (var doc in docs) {
       final data = doc.data() as Map<String, dynamic>;
@@ -514,24 +578,19 @@ class _UserManagementViewState extends State<UserManagementView> {
       } else if (role == 'independent') {
         independents.add(doc);
       } else if (role == 'nutritionist') {
-        // Add the nutritionist to the map so we can show them or just use them as header
         nutritionistDocs[doc.id] = doc;
-        // Ensure their group exists in the map
         if (!nutritionistGroups.containsKey(doc.id)) {
           nutritionistGroups[doc.id] = [];
         }
       } else if (role == 'user') {
-        // Client logic
         if (createdBy != null &&
             (nutNameMap.containsKey(createdBy) ||
                 nutritionistDocs.containsKey(createdBy))) {
-          // It's assigned to a known nutritionist
           if (!nutritionistGroups.containsKey(createdBy)) {
             nutritionistGroups[createdBy] = [];
           }
           nutritionistGroups[createdBy]!.add(doc);
         } else {
-          // Unassigned client -> treat as independent
           independents.add(doc);
         }
       }
@@ -539,12 +598,11 @@ class _UserManagementViewState extends State<UserManagementView> {
 
     return ListView(
       children: [
-        // 1. NUTRITIONIST GROUPS
         ...nutritionistGroups.entries.map((entry) {
           final nutId = entry.key;
           final clients = entry.value;
           final nutName = nutNameMap[nutId] ?? "Nutritionist ID: $nutId";
-          final nutDoc = nutritionistDocs[nutId]; // The doc itself if visible
+          final nutDoc = nutritionistDocs[nutId];
 
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
@@ -568,7 +626,10 @@ class _UserManagementViewState extends State<UserManagementView> {
                       onDelete: _deleteUser,
                       onUploadDiet: _uploadDiet,
                       onUploadParser: _uploadParser,
+                      onHistory: (_) {}, // Nut history irrelevant here
+                      onEdit: _editUser,
                       currentUserRole: _currentUserRole,
+                      currentUserId: _currentUserId,
                       roleColor: _getRoleColor('nutritionist'),
                     ),
                   ),
@@ -579,7 +640,7 @@ class _UserManagementViewState extends State<UserManagementView> {
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 400,
-                          mainAxisExtent: 230,
+                          mainAxisExtent: 240,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                         ),
@@ -590,21 +651,21 @@ class _UserManagementViewState extends State<UserManagementView> {
                       onDelete: _deleteUser,
                       onUploadDiet: _uploadDiet,
                       onUploadParser: _uploadParser,
+                      onHistory: (uid) => _showUserHistory(
+                        uid,
+                        (clients[idx].data() as Map)['first_name'] ?? 'Client',
+                      ),
+                      onEdit: _editUser,
                       currentUserRole: _currentUserRole,
+                      currentUserId: _currentUserId,
                       roleColor: _getRoleColor('user'),
                     ),
-                  ),
-                if (clients.isEmpty && nutDoc == null)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text("No visible clients or nutritionist data."),
                   ),
               ],
             ),
           );
         }),
 
-        // 2. INDEPENDENT USERS CARD
         if (independents.isNotEmpty)
           Card(
             color: Colors.orange.shade50,
@@ -622,26 +683,35 @@ class _UserManagementViewState extends State<UserManagementView> {
               subtitle: Text(
                 "${independents.length} Users unassigned or independent",
               ),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => IndependentUsersScreen(
-                      users: independents,
-                      onDelete: _deleteUser,
-                      onUploadDiet: _uploadDiet,
-                      onUploadParser: _uploadParser,
-                      currentUserRole: _currentUserRole,
-                      roleColor: _getRoleColor('independent'),
-                    ),
-                  ),
-                );
-              },
+            ),
+          ),
+        if (independents.isNotEmpty)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 400,
+              mainAxisExtent: 240,
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
+            ),
+            itemCount: independents.length,
+            itemBuilder: (ctx, idx) => _UserCard(
+              doc: independents[idx],
+              onDelete: _deleteUser,
+              onUploadDiet: _uploadDiet,
+              onUploadParser: _uploadParser,
+              onHistory: (uid) => _showUserHistory(
+                uid,
+                (independents[idx].data() as Map)['first_name'] ?? 'User',
+              ),
+              onEdit: _editUser,
+              currentUserRole: _currentUserRole,
+              currentUserId: _currentUserId,
+              roleColor: _getRoleColor('independent'),
             ),
           ),
 
-        // 3. ADMINS
         if (admins.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.all(16.0),
@@ -655,7 +725,7 @@ class _UserManagementViewState extends State<UserManagementView> {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 400,
-              mainAxisExtent: 230,
+              mainAxisExtent: 240,
               crossAxisSpacing: 20,
               mainAxisSpacing: 20,
             ),
@@ -665,7 +735,10 @@ class _UserManagementViewState extends State<UserManagementView> {
               onDelete: _deleteUser,
               onUploadDiet: _uploadDiet,
               onUploadParser: _uploadParser,
+              onHistory: (_) {},
+              onEdit: _editUser,
               currentUserRole: _currentUserRole,
+              currentUserId: _currentUserId,
               roleColor: _getRoleColor('admin'),
             ),
           ),
@@ -675,60 +748,15 @@ class _UserManagementViewState extends State<UserManagementView> {
   }
 }
 
-/// A separate screen to list independent users when the card is clicked
-class IndependentUsersScreen extends StatelessWidget {
-  final List<DocumentSnapshot> users;
-  final Function(String) onDelete;
-  final Function(String) onUploadDiet;
-  final Function(String) onUploadParser;
-  final String currentUserRole;
-  final Color roleColor;
-
-  const IndependentUsersScreen({
-    super.key,
-    required this.users,
-    required this.onDelete,
-    required this.onUploadDiet,
-    required this.onUploadParser,
-    required this.currentUserRole,
-    required this.roleColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Independent Users")),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 400,
-          mainAxisExtent: 230,
-          crossAxisSpacing: 20,
-          mainAxisSpacing: 20,
-        ),
-        itemCount: users.length,
-        itemBuilder: (context, index) {
-          return _UserCard(
-            doc: users[index],
-            onDelete: onDelete,
-            onUploadDiet: onUploadDiet,
-            onUploadParser: onUploadParser,
-            currentUserRole: currentUserRole,
-            roleColor: roleColor,
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Refactored User Card Component
 class _UserCard extends StatelessWidget {
   final DocumentSnapshot doc;
   final Function(String) onDelete;
   final Function(String) onUploadDiet;
   final Function(String) onUploadParser;
+  final Function(String) onHistory;
+  final Function(String, String, String, String) onEdit;
   final String currentUserRole;
+  final String currentUserId;
   final Color roleColor;
 
   const _UserCard({
@@ -736,7 +764,10 @@ class _UserCard extends StatelessWidget {
     required this.onDelete,
     required this.onUploadDiet,
     required this.onUploadParser,
+    required this.onHistory,
+    required this.onEdit,
     required this.currentUserRole,
+    required this.currentUserId,
     required this.roleColor,
   });
 
@@ -744,16 +775,24 @@ class _UserCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = doc.data() as Map<String, dynamic>;
     final role = data['role'] ?? 'user';
-    final name = "${data['first_name'] ?? ''} ${data['last_name'] ?? ''}";
+    final firstName = data['first_name'] ?? '';
+    final lastName = data['last_name'] ?? '';
+    final name = "$firstName $lastName";
+    final email = data['email'] ?? '';
     final date = data['created_at'] != null
         ? DateFormat(
             'dd MMM yyyy',
           ).format((data['created_at'] as Timestamp).toDate())
         : '-';
+    final createdBy = data['created_by'];
+    final requiresPassChange = data['requires_password_change'] == true;
 
     bool showParser = role == 'nutritionist';
     bool showDiet = role == 'user' || role == 'independent';
     bool canDelete = currentUserRole == 'admin' || role == 'user';
+    bool canEdit =
+        requiresPassChange &&
+        (currentUserRole == 'admin' || createdBy == currentUserId);
 
     return Card(
       child: Padding(
@@ -788,7 +827,7 @@ class _UserCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        data['email'] ?? 'No Email',
+                        email,
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -816,16 +855,39 @@ class _UserCard extends StatelessWidget {
               ],
             ),
             const Spacer(),
+            if (requiresPassChange)
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  "Password Change Pending",
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             const Divider(),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (showDiet)
+                if (showDiet) ...[
+                  IconButton(
+                    icon: const Icon(Icons.history, color: Colors.teal),
+                    tooltip: "Storico Diete",
+                    onPressed: () => onHistory(data['uid']),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.upload_file, color: Colors.blueGrey),
                     tooltip: "Carica Dieta",
                     onPressed: () => onUploadDiet(data['uid']),
                   ),
+                ],
                 if (showParser)
                   IconButton(
                     icon: const Icon(
@@ -835,7 +897,13 @@ class _UserCard extends StatelessWidget {
                     tooltip: "Configura Parser",
                     onPressed: () => onUploadParser(data['uid']),
                   ),
-                const SizedBox(width: 8),
+                if (canEdit)
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.indigo),
+                    tooltip: "Modifica",
+                    onPressed: () =>
+                        onEdit(data['uid'], email, firstName, lastName),
+                  ),
                 if (canDelete)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -845,15 +913,226 @@ class _UserCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Creato il: $date",
-                style: TextStyle(fontSize: 10, color: Colors.grey[400]),
-              ),
+            Text(
+              "Creato il: $date",
+              style: TextStyle(fontSize: 10, color: Colors.grey[400]),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _UserHistoryScreen extends StatelessWidget {
+  final String targetUid;
+  final String userName;
+
+  const _UserHistoryScreen({required this.targetUid, required this.userName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Storico: $userName")),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('diet_history')
+            .where('userId', isEqualTo: targetUid)
+            .orderBy('uploadedAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty)
+            return const Center(child: Text("Nessuna dieta precedente."));
+
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (ctx, i) {
+              final data = docs[i].data() as Map<String, dynamic>;
+              final date =
+                  (data['uploadedAt'] as Timestamp?)?.toDate() ??
+                  DateTime.now();
+              return ListTile(
+                leading: const Icon(Icons.picture_as_pdf),
+                title: Text(data['fileName'] ?? "Dieta"),
+                subtitle: Text(DateFormat('dd MMM yyyy HH:mm').format(date)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Visualizzazione dettagli non implementata in Admin",
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ParserConfigScreen extends StatefulWidget {
+  final String targetUid;
+  const _ParserConfigScreen({required this.targetUid});
+  @override
+  State<_ParserConfigScreen> createState() => _ParserConfigScreenState();
+}
+
+class _ParserConfigScreenState extends State<_ParserConfigScreen> {
+  final AdminRepository _repo = AdminRepository();
+  bool _isLoading = false;
+
+  Future<void> _uploadNew(BuildContext context) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['txt'],
+    );
+    if (result != null && result.files.single.bytes != null) {
+      setState(() => _isLoading = true);
+      try {
+        await _repo.uploadParserConfig(widget.targetUid, result.files.single);
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Configurazione aggiornata!")),
+          );
+      } catch (e) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Errore: $e"), backgroundColor: Colors.red),
+          );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Configurazione Parser")),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.upload),
+                label: const Text("Carica Nuova Configurazione (.txt)"),
+                onPressed: _isLoading ? null : () => _uploadNew(context),
+              ),
+            ),
+          ),
+          if (_isLoading) const LinearProgressIndicator(),
+          const Divider(),
+          Expanded(
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(widget.targetUid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData)
+                  return const Center(child: CircularProgressIndicator());
+                final user = snapshot.data!.data() as Map<String, dynamic>;
+                final current = user['custom_parser_prompt'] as String?;
+
+                return DefaultTabController(
+                  length: 2,
+                  child: Column(
+                    children: [
+                      const TabBar(
+                        tabs: [
+                          Tab(text: "Attuale"),
+                          Tab(text: "Cronologia"),
+                        ],
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            // Tab 1: Current
+                            SingleChildScrollView(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                current ??
+                                    "Nessuna configurazione personalizzata attiva (usa default).",
+                              ),
+                            ),
+                            // Tab 2: History
+                            StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(widget.targetUid)
+                                  .collection('parser_history')
+                                  .orderBy('uploaded_at', descending: true)
+                                  .snapshots(),
+                              builder: (ctx, histSnap) {
+                                if (!histSnap.hasData)
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                final docs = histSnap.data!.docs;
+                                if (docs.isEmpty)
+                                  return const Center(
+                                    child: Text("Nessuna cronologia."),
+                                  );
+                                return ListView.separated(
+                                  itemCount: docs.length,
+                                  separatorBuilder: (_, __) => const Divider(),
+                                  itemBuilder: (c, i) {
+                                    final h =
+                                        docs[i].data() as Map<String, dynamic>;
+                                    final date =
+                                        (h['uploaded_at'] as Timestamp?)
+                                            ?.toDate() ??
+                                        DateTime.now();
+                                    return ListTile(
+                                      title: Text(
+                                        DateFormat(
+                                          'dd MMM yyyy HH:mm',
+                                        ).format(date),
+                                      ),
+                                      subtitle: Text(
+                                        (h['content'] as String).substring(
+                                              0,
+                                              50,
+                                            ) +
+                                            "...",
+                                      ),
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (_) => AlertDialog(
+                                            title: const Text(
+                                              "Dettaglio Config",
+                                            ),
+                                            content: SingleChildScrollView(
+                                              child: Text(h['content']),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

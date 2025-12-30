@@ -30,7 +30,6 @@ class AdminApp extends StatelessWidget {
           surface: Colors.white,
           background: const Color(0xFFF3F4F6),
         ),
-        // [FIX] Usiamo CardThemeData per compatibilità con la tua versione
         cardTheme: CardThemeData(
           elevation: 2,
           shape: RoundedRectangleBorder(
@@ -151,6 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: "Email",
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
+                  textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -160,6 +160,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: "Password",
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _login(),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(

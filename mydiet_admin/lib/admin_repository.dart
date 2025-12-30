@@ -28,7 +28,6 @@ class AdminRepository {
     return false;
   }
 
-  // UPDATED: Supports custom message
   Future<void> setMaintenanceStatus(bool enabled, {String? message}) async {
     final token = await _getToken();
     await http.post(
@@ -44,10 +43,8 @@ class AdminRepository {
     );
   }
 
-  // UPDATED: Sends UTC time to fix timezone bugs
   Future<void> scheduleMaintenance(DateTime date, bool notifyUsers) async {
     final token = await _getToken();
-
     String isoDate = date.toUtc().toIso8601String();
     String formattedDate = DateFormat('EEEE, d MMM "at" HH:mm').format(date);
 
@@ -82,7 +79,7 @@ class AdminRepository {
     }
   }
 
-  // --- USER MANAGEMENT & UPLOADS (UNCHANGED) ---
+  // --- USER MANAGEMENT ---
 
   Future<void> createUser({
     required String email,
@@ -108,6 +105,30 @@ class AdminRepository {
     );
     if (response.statusCode != 200)
       throw Exception('Failed to create user: ${response.body}');
+  }
+
+  Future<void> updateUser(
+    String uid, {
+    String? email,
+    String? firstName,
+    String? lastName,
+  }) async {
+    final token = await _getToken();
+    final response = await http.put(
+      Uri.parse('$_baseUrl/admin/update-user/$uid'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        if (email != null) 'email': email,
+        if (firstName != null) 'first_name': firstName,
+        if (lastName != null) 'last_name': lastName,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update user: ${response.body}');
+    }
   }
 
   Future<void> deleteUser(String uid) async {

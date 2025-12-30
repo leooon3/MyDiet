@@ -69,7 +69,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS", "DELETE"],
+    allow_methods=["GET", "POST", "OPTIONS", "DELETE", "PUT"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -84,6 +84,11 @@ class CreateUserRequest(BaseModel):
     first_name: str
     last_name: str
     parent_id: Optional[str] = None
+
+class UpdateUserRequest(BaseModel):
+    email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 class MaintenanceRequest(BaseModel):
     enabled: bool
@@ -133,6 +138,8 @@ async def verify_admin(uid: str = Depends(verify_token)):
         db = firebase_admin.firestore.client()
         user_doc = db.collection('users').document(uid).get()
         if not user_doc.exists or user_doc.to_dict().get('role') != 'admin':
+            if user_doc.exists and user_doc.to_dict().get('role') == 'nutritionist':
+                 return uid
             raise HTTPException(status_code=403, detail="Admin privileges required")
         return uid
     except HTTPException:
@@ -157,17 +164,12 @@ async def maintenance_worker():
                 
                 if is_scheduled and start_str:
                     try:
-                        # 1. Parse Time (Handle UTC Z)
                         clean_str = start_str.replace('Z', '+00:00')
                         scheduled_time = datetime.fromisoformat(clean_str)
-                        
-                        # Ensure it is timezone aware (UTC) if naive
                         if scheduled_time.tzinfo is None:
                             scheduled_time = scheduled_time.replace(tzinfo=timezone.utc)
                         
-                        # 2. Compare with UTC Now
                         now = datetime.now(timezone.utc)
-
                         if now >= scheduled_time:
                             logger.info("maintenance_triggered", scheduled_for=start_str)
                             doc_ref.update({
@@ -219,6 +221,15 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
                 if parent_doc.exists: custom_prompt = parent_doc.to_dict().get('custom_parser_prompt')
         
         raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, temp_filename, custom_prompt)
+        
+        # Save to history
+        db.collection('diet_history').add({
+            'userId': target_uid,
+            'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
+            'fileName': file.filename,
+            'parsedData': _convert_to_app_format(raw_data).dict()
+        })
+        
         if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
         return _convert_to_app_format(raw_data)
     finally:
@@ -260,6 +271,37 @@ async def admin_create_user(body: CreateUserRequest, requester_id: str = Depends
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.put("/admin/update-user/{target_uid}")
+async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_id: str = Depends(verify_admin)):
+    try:
+        db = firebase_admin.firestore.client()
+        
+        # Update Auth
+        update_args = {}
+        if body.email: update_args['email'] = body.email
+        if body.first_name or body.last_name:
+             user = auth.get_user(target_uid)
+             names = user.display_name.split(' ') if user.display_name else ["", ""]
+             new_first = body.first_name if body.first_name else names[0]
+             new_last = body.last_name if body.last_name else (names[1] if len(names)>1 else "")
+             update_args['display_name'] = f"{new_first} {new_last}".strip()
+
+        if update_args:
+            auth.update_user(target_uid, **update_args)
+
+        # Update Firestore
+        fs_update = {}
+        if body.email: fs_update['email'] = body.email
+        if body.first_name: fs_update['first_name'] = body.first_name
+        if body.last_name: fs_update['last_name'] = body.last_name
+        
+        if fs_update:
+            db.collection('users').document(target_uid).update(fs_update)
+            
+        return {"message": "User updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/admin/delete-user/{target_uid}")
 async def admin_delete_user(target_uid: str, requester_id: str = Depends(verify_admin)):
     try:
@@ -288,14 +330,26 @@ async def admin_sync_users(requester_id: str = Depends(verify_admin)):
 async def upload_parser_config(target_uid: str, file: UploadFile = File(...), requester_id: str = Depends(verify_admin)):
     try:
         content = (await file.read()).decode("utf-8")
-        firebase_admin.firestore.client().collection('users').document(target_uid).update({
-            'custom_parser_prompt': content, 'has_custom_parser': True
+        db = firebase_admin.firestore.client()
+        
+        db.collection('users').document(target_uid).update({
+            'custom_parser_prompt': content, 
+            'has_custom_parser': True,
+            'parser_updated_at': firebase_admin.firestore.SERVER_TIMESTAMP
         })
+        
+        # History
+        db.collection('users').document(target_uid).collection('parser_history').add({
+            'content': content,
+            'uploaded_at': firebase_admin.firestore.SERVER_TIMESTAMP,
+            'uploaded_by': requester_id
+        })
+        
         return {"message": "Updated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- MAINTENANCE ENDPOINTS ---
+# --- MAINTENANCE & HELPERS ---
 
 @app.get("/admin/config/maintenance")
 async def get_maintenance_status(requester_id: str = Depends(verify_admin)):
@@ -333,7 +387,6 @@ async def cancel_maintenance_schedule(requester_id: str = Depends(verify_admin))
     })
     return {"status": "cancelled"}
 
-# --- HELPER ---
 def _convert_to_app_format(gemini_output) -> DietResponse:
     if not gemini_output: return DietResponse(plan={}, substitutions={})
     app_plan, app_substitutions = {}, {}

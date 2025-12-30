@@ -35,6 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
       if (_isLogin) {
@@ -91,12 +92,15 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: _emailCtrl,
               decoration: const InputDecoration(labelText: "Email"),
               keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _passCtrl,
               decoration: const InputDecoration(labelText: "Password"),
               obscureText: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 24),
             if (_isLoading)
