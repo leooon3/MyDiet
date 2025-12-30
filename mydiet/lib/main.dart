@@ -74,7 +74,7 @@ class DietApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------
-// 🛡️ MAINTENANCE GUARD WIDGET
+// 🛡️ MAINTENANCE GUARD WIDGET (UPDATED)
 // -------------------------------------------------------
 class MaintenanceGuard extends StatelessWidget {
   final Widget child;
@@ -89,33 +89,54 @@ class MaintenanceGuard extends StatelessWidget {
           .doc('global')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return child;
-        }
-
-        if (!snapshot.hasData || !snapshot.data!.exists) {
+        // 1. Pass through while loading or if error
+        if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
           return child;
         }
 
         final data = snapshot.data!.data() as Map<String, dynamic>?;
-        bool isMaintenance = data?['maintenance_mode'] ?? false;
+        if (data == null) return child;
 
-        if (isMaintenance) {
-          return const Scaffold(
+        // 2. Check Manual Mode
+        bool manualMaintenance = data['maintenance_mode'] ?? false;
+
+        // 3. Check Scheduled Mode
+        bool isScheduled = data['is_scheduled'] ?? false;
+        bool scheduleActive = false;
+
+        if (isScheduled) {
+          // The Python backend saves this as an ISO 8601 String
+          String? startStr = data['scheduled_maintenance_start'];
+          if (startStr != null) {
+            DateTime? startDate = DateTime.tryParse(startStr);
+            // If the current time is AFTER the start date, activate maintenance
+            if (startDate != null && DateTime.now().isAfter(startDate)) {
+              scheduleActive = true;
+            }
+          }
+        }
+
+        // 4. Trigger Block if either condition is true
+        if (manualMaintenance || scheduleActive) {
+          String msg =
+              data['maintenance_message'] ??
+              "We are updating the system. Please wait.";
+
+          return Scaffold(
             backgroundColor: Colors.white,
             body: Padding(
-              padding: EdgeInsets.all(32.0),
+              padding: const EdgeInsets.all(32.0),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.warning_amber_rounded,
                       size: 80,
                       color: Colors.orange,
                     ),
-                    SizedBox(height: 24),
-                    Text(
+                    const SizedBox(height: 24),
+                    const Text(
                       "Under Maintenance",
                       style: TextStyle(
                         fontSize: 24,
@@ -124,11 +145,11 @@ class MaintenanceGuard extends StatelessWidget {
                         decoration: TextDecoration.none,
                       ),
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Text(
-                      "We are updating the system. Please wait.",
+                      msg, // Shows the dynamic message set in Admin
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.black54,
                         fontSize: 16,
                         decoration: TextDecoration.none,

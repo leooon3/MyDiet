@@ -177,4 +177,17 @@ class AdminRepository {
       throw Exception('Failed to schedule maintenance: ${response.body}');
     }
   }
+
+  Future<void> cancelMaintenanceSchedule() async {
+    final token = await _getToken();
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/admin/cancel-maintenance'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to cancel schedule: ${response.body}');
+    }
+  }
 }

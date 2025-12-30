@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../admin_repository.dart';
 
 class ConfigView extends StatefulWidget {
@@ -11,52 +12,84 @@ class ConfigView extends StatefulWidget {
 
 class _ConfigViewState extends State<ConfigView> {
   final AdminRepository _repo = AdminRepository();
-  bool _maintenanceEnabled = false;
+
+  // UI Loading State
   bool _isLoading = true;
 
+  // Manual Switch State (from DB)
+  bool _manualMaintenance = false;
+
+  // Scheduled State (from DB)
+  bool _isScheduled = false;
+  DateTime? _scheduledDate;
+
+  // Selection for NEW schedule
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
 
   @override
   void initState() {
     super.initState();
-    _loadConfig();
+    // Listen to the database in real-time so the UI updates automatically
+    _initStream();
   }
 
-  Future<void> _loadConfig() async {
-    try {
-      bool status = await _repo.getMaintenanceStatus();
-      if (mounted) setState(() => _maintenanceEnabled = status);
-    } catch (e) {
-      debugPrint("Error loading config: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  void _initStream() {
+    FirebaseFirestore.instance
+        .collection('config')
+        .doc('global')
+        .snapshots()
+        .listen((snapshot) {
+          if (mounted && snapshot.exists) {
+            final data = snapshot.data() as Map<String, dynamic>;
+
+            setState(() {
+              // 1. Update Manual Status
+              _manualMaintenance = data['maintenance_mode'] ?? false;
+
+              // 2. Update Schedule Status
+              _isScheduled = data['is_scheduled'] ?? false;
+              if (data['scheduled_maintenance_start'] != null) {
+                _scheduledDate = DateTime.tryParse(
+                  data['scheduled_maintenance_start'],
+                );
+              } else {
+                _scheduledDate = null;
+              }
+
+              _isLoading = false;
+            });
+          }
+        });
   }
+
+  // Helper to determine if the app is currently blocked for users
+  bool get _isEffectivelyDown {
+    // If Manual Switch is ON, it's down.
+    if (_manualMaintenance) return true;
+
+    // If Schedule is active AND we are past the start time, it's down.
+    if (_isScheduled && _scheduledDate != null) {
+      return DateTime.now().isAfter(_scheduledDate!);
+    }
+
+    return false;
+  }
+
+  // --- ACTIONS ---
 
   Future<void> _toggleMaintenance(bool value) async {
     setState(() => _isLoading = true);
     try {
       await _repo.setMaintenanceStatus(value);
-      setState(() => _maintenanceEnabled = value);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              value ? "Maintenance ENABLED" : "Maintenance DISABLED",
-            ),
-            backgroundColor: value ? Colors.red : Colors.green,
-          ),
-        );
-      }
+      // No need to set state manually here, the stream will update it
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+        setState(() => _isLoading = false);
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -121,10 +154,11 @@ class _ConfigViewState extends State<ConfigView> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Maintenance Scheduled & Notification Sent!"),
+              content: Text("Maintenance Scheduled!"),
               backgroundColor: Colors.blue,
             ),
           );
+          // Clear selection
           setState(() {
             _selectedDate = null;
             _selectedTime = null;
@@ -142,9 +176,75 @@ class _ConfigViewState extends State<ConfigView> {
     }
   }
 
+  Future<void> _cancelSchedule() async {
+    bool confirm =
+        await showDialog(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text("Cancel Schedule?"),
+            content: const Text(
+              "This will remove the schedule. If maintenance is currently active due to this schedule, users will regain access immediately.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text("No"),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text("Yes, Cancel"),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirm) {
+      setState(() => _isLoading = true);
+      try {
+        await _repo.cancelMaintenanceSchedule();
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Schedule Cancelled")));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // --- BUILD UI ---
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
+
+    // Status Visuals
+    Color statusColor = _isEffectivelyDown
+        ? Colors.red.shade50
+        : Colors.green.shade50;
+    Color statusBorder = _isEffectivelyDown ? Colors.red : Colors.green;
+    String statusTitle = _isEffectivelyDown
+        ? "SYSTEM IS DOWN"
+        : "SYSTEM IS ACTIVE";
+    IconData statusIcon = _isEffectivelyDown ? Icons.lock : Icons.check_circle;
+
+    // Status Description
+    String detailedStatus = "";
+    if (_manualMaintenance) {
+      detailedStatus = "Manual Override is ON";
+    } else if (_isEffectivelyDown) {
+      detailedStatus = "Schedule is Active (Start time passed)";
+    } else {
+      detailedStatus = "Users can access the app";
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -156,19 +256,47 @@ class _ConfigViewState extends State<ConfigView> {
           ),
           const SizedBox(height: 20),
 
-          // --- MANUAL TOGGLE ---
+          // 1. GLOBAL STATUS INDICATOR
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: statusColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: statusBorder, width: 2),
+            ),
+            child: Row(
+              children: [
+                Icon(statusIcon, color: statusBorder, size: 30),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      statusTitle,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: statusBorder,
+                      ),
+                    ),
+                    Text(
+                      detailedStatus,
+                      style: TextStyle(color: Colors.black87),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // 2. MANUAL TOGGLE
           Card(
-            color: _maintenanceEnabled
-                ? Colors.red.shade50
-                : Colors.green.shade50,
             child: SwitchListTile(
-              title: const Text("Maintenance Mode (Immediate)"),
-              subtitle: Text(
-                _maintenanceEnabled
-                    ? "App is locked for users"
-                    : "App is active",
-              ),
-              value: _maintenanceEnabled,
+              title: const Text("Manual Override"),
+              subtitle: const Text("Force maintenance mode ON immediately"),
+              value: _manualMaintenance,
               onChanged: _toggleMaintenance,
               activeColor: Colors.red,
             ),
@@ -178,21 +306,46 @@ class _ConfigViewState extends State<ConfigView> {
           const Divider(),
           const SizedBox(height: 20),
 
-          // --- SCHEDULE SECTION ---
+          // 3. SCHEDULE SECTION
           const Text(
             "Schedule Maintenance",
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
+
+          // A. Current Schedule Card (Only visible if a schedule exists)
+          if (_isScheduled && _scheduledDate != null)
+            Card(
+              color: Colors.blue.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.timer, color: Colors.blue),
+                title: Text(
+                  "Scheduled: ${DateFormat('EEE, d MMM - HH:mm').format(_scheduledDate!)}",
+                ),
+                subtitle: Text(
+                  _isEffectivelyDown
+                      ? "STATUS: ACTIVE (Blocking Users)"
+                      : "STATUS: PENDING",
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  tooltip: "Cancel Schedule",
+                  onPressed:
+                      _cancelSchedule, // Calls the method to delete from DB
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 10),
+
+          // B. New Schedule Inputs
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Pick a date and time to warn users about upcoming maintenance.",
-                  ),
+                  const Text("Set new schedule & Notify users:"),
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -202,19 +355,21 @@ class _ConfigViewState extends State<ConfigView> {
                         label: Text(
                           _selectedDate == null
                               ? "Select Date & Time"
-                              : "${DateFormat('dd/MM/yyyy').format(_selectedDate!)} at ${_selectedTime!.format(context)}",
+                              : "${DateFormat('dd/MM').format(_selectedDate!)} at ${_selectedTime!.format(context)}",
                         ),
                       ),
                       const Spacer(),
-                      if (_selectedDate != null)
-                        FilledButton.icon(
-                          onPressed: _scheduleMaintenance,
-                          icon: const Icon(Icons.send),
-                          label: const Text("Schedule & Notify"),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                          ),
+                      FilledButton.icon(
+                        onPressed:
+                            (_selectedDate != null && _selectedTime != null)
+                            ? _scheduleMaintenance
+                            : null,
+                        icon: const Icon(Icons.send),
+                        label: const Text("Schedule"),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.orange,
                         ),
+                      ),
                     ],
                   ),
                 ],

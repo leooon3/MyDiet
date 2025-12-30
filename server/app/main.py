@@ -581,3 +581,23 @@ def _convert_to_app_format(gemini_output) -> DietResponse:
         plan=app_plan,
         substitutions=app_substitutions
     )
+# [ADD THIS NEW ENDPOINT]
+@app.post("/admin/cancel-maintenance")
+async def cancel_maintenance_schedule(
+    requester_id: str = Depends(verify_admin)
+):
+    try:
+        db = firebase_admin.firestore.client()
+        # Remove schedule fields and set is_scheduled to False
+        db.collection('config').document('global').update({
+            "is_scheduled": False,
+            "scheduled_maintenance_start": firebase_admin.firestore.DELETE_FIELD,
+            "maintenance_message": firebase_admin.firestore.DELETE_FIELD 
+        })
+        
+        logger.info("maintenance_schedule_cancelled", admin=requester_id)
+        return {"status": "cancelled", "message": "Schedule removed."}
+        
+    except Exception as e:
+        logger.error("cancel_maintenance_error", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
