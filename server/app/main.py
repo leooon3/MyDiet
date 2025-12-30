@@ -3,8 +3,8 @@ import uuid
 import structlog
 import aiofiles
 import json
-import asyncio # [ADDED]
-from datetime import datetime # [ADDED]
+import asyncio
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 
 import firebase_admin
@@ -26,6 +26,7 @@ from app.services.notification_service import NotificationService
 from app.services.normalization import normalize_meal_name
 from app.core.config import settings
 from app.models.schemas import DietResponse, Dish, Ingredient, SubstitutionGroup, SubstitutionOption
+# Ensure this file exists in app/broadcast.py
 from app.broadcast import broadcast_message 
 
 # --- CONFIGURATION ---
@@ -164,8 +165,8 @@ async def verify_admin(uid: str = Depends(verify_token)):
 
 async def maintenance_worker():
     """
-    Runs every 60 seconds to check if a scheduled maintenance is due.
-    If due, it flips the 'maintenance_mode' boolean in DB, making it secure against client-side time manipulation.
+    Checks every 60 seconds if a scheduled maintenance is due.
+    Robust Timezone Handling: Compares UTC to UTC to prevent bypass.
     """
     logger.info("maintenance_worker_started")
     while True:
@@ -179,29 +180,30 @@ async def maintenance_worker():
                 is_scheduled = data.get('is_scheduled', False)
                 start_str = data.get('scheduled_maintenance_start')
                 
-                # If scheduled and we have a start time
                 if is_scheduled and start_str:
                     try:
-                        # Parse ISO string (Naive or Aware depending on what Dart sends)
-                        # NOTE: Ideally both client/server use UTC. 
-                        # Here we assume server time matches the intent or string includes offset.
-                        scheduled_time = datetime.fromisoformat(start_str)
-                        now = datetime.now()
+                        # 1. Parse the Scheduled Time (Handle 'Z' for UTC if present)
+                        clean_str = start_str.replace('Z', '+00:00')
+                        scheduled_time = datetime.fromisoformat(clean_str)
+                        
+                        # 2. Get Current Time (UTC Aware)
+                        now = datetime.now(timezone.utc)
 
-                        # If time has passed
+                        # 3. Compare
                         if now >= scheduled_time:
                             logger.info("maintenance_triggered_automatically", scheduled_for=start_str)
                             
-                            # 1. Turn ON Maintenance Mode
-                            # 2. Turn OFF Schedule (so it doesn't trigger loop repeatedly)
+                            # Trigger Maintenance & Clear Schedule
                             doc_ref.update({
                                 "maintenance_mode": True,
                                 "is_scheduled": False,
                                 "scheduled_maintenance_start": firestore.DELETE_FIELD,
                                 "updated_by": "system_scheduler"
                             })
-                    except ValueError:
-                        logger.error("invalid_date_format_in_db", date_str=start_str)
+                    except ValueError as ve:
+                        logger.error("date_parsing_error", error=str(ve), date_str=start_str)
+                    except TypeError as te:
+                        logger.error("timezone_comparison_error", error=str(te))
                         
         except Exception as e:
             logger.error("maintenance_worker_error", error=str(e))
@@ -486,7 +488,7 @@ async def set_maintenance_status(
         config_ref = db.collection('config').document('global')
         config_ref.set({
             'maintenance_mode': body.enabled,
-            'updated_at': firebase_admin.firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
             'updated_by': requester_id
         }, merge=True)
         return {"message": f"Maintenance Mode is now {body.enabled}"}
@@ -509,7 +511,7 @@ async def schedule_maintenance(
             "is_scheduled": True
         }, merge=True)
 
-        # 2. Broadcast
+        # 2. Broadcast Notification
         sent_count = 0
         if req.notify:
             try:
@@ -537,8 +539,8 @@ async def cancel_maintenance_schedule(
         db = firebase_admin.firestore.client()
         db.collection('config').document('global').update({
             "is_scheduled": False,
-            "scheduled_maintenance_start": firebase_admin.firestore.DELETE_FIELD,
-            "maintenance_message": firebase_admin.firestore.DELETE_FIELD 
+            "scheduled_maintenance_start": firestore.DELETE_FIELD,
+            "maintenance_message": firestore.DELETE_FIELD 
         })
         
         logger.info("maintenance_schedule_cancelled", admin=requester_id)

@@ -155,7 +155,7 @@ class AdminRepository {
   /// New Method: Schedule Maintenance and Notify Users
   Future<void> scheduleMaintenance(DateTime date, bool notifyUsers) async {
     final token = await _getToken();
-
+    String isoDate = date.toUtc().toIso8601String();
     // Format: "Friday, 12 Oct at 14:30"
     String formattedDate = DateFormat('EEEE, d MMM "at" HH:mm').format(date);
 
@@ -166,7 +166,7 @@ class AdminRepository {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
-        'scheduled_time': date.toIso8601String(),
+        'scheduled_time': isoDate,
         'message':
             "Scheduled Maintenance: The app will be unavailable on $formattedDate.",
         'notify': notifyUsers,
