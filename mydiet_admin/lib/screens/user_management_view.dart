@@ -1021,6 +1021,15 @@ class _UserCard extends StatelessWidget {
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      // [DEBUG] Show Document ID to identify duplicates
+                      Text(
+                        "DOC ID: ${doc.id}",
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),

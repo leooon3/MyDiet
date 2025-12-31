@@ -270,25 +270,44 @@ async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_f
 async def admin_create_user(body: CreateUserRequest, requester_id: str = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
+        
+        # 1. CLEANUP: Delete any existing orphaned docs with this email to prevent duplicates
+        existing_docs = db.collection('users').where('email', '==', body.email).stream()
+        for doc in existing_docs:
+            doc.reference.delete()
+
+        # 2. Check requester permissions (for inheritance logic)
         requester_doc = db.collection('users').document(requester_id).get()
         final_parent_id = body.parent_id
         if requester_doc.exists and requester_doc.to_dict().get('role') == 'nutritionist':
             final_parent_id = requester_id
         
-        user = auth.create_user(email=body.email, password=body.password, display_name=f"{body.first_name} {body.last_name}", email_verified=True)
+        # 3. Create Auth User
+        user = auth.create_user(
+            email=body.email, 
+            password=body.password, 
+            display_name=f"{body.first_name} {body.last_name}", 
+            email_verified=True
+        )
         auth.set_custom_user_claims(user.uid, {'role': body.role})
         
+        # 4. Create Firestore Document (Clean State)
         db.collection('users').document(user.uid).set({
-            'uid': user.uid, 'email': body.email, 'role': body.role,
-            'first_name': body.first_name, 'last_name': body.last_name,
-            'parent_id': final_parent_id, 'is_active': True,
+            'uid': user.uid, 
+            'email': body.email, 
+            'role': body.role,
+            'first_name': body.first_name, 
+            'last_name': body.last_name,
+            'parent_id': final_parent_id, 
+            'is_active': True,
             'created_at': firebase_admin.firestore.SERVER_TIMESTAMP,
-            'created_by': requester_id, 'requires_password_change': True
+            'created_by': requester_id, 
+            'requires_password_change': True
         })
         return {"uid": user.uid, "message": "User created"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @app.put("/admin/update-user/{target_uid}")
 async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_id: str = Depends(verify_admin)):
     try:
@@ -364,16 +383,31 @@ async def admin_delete_user(target_uid: str, requester_id: str = Depends(verify_
 async def admin_sync_users(requester_id: str = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
+        
+        # Iterate through all Auth users
         for user in auth.list_users().users:
+            
+            # 1. GHOST BUSTER: Find and delete any docs with this email that have the WRONG ID
+            email_docs = db.collection('users').where('email', '==', user.email).stream()
+            for doc in email_docs:
+                if doc.id != user.uid:
+                    doc.reference.delete()
+
+            # 2. Create missing document if it doesn't exist
             if not db.collection('users').document(user.uid).get().exists:
                 db.collection('users').document(user.uid).set({
-                    'uid': user.uid, 'email': user.email, 'role': 'independent',
-                    'first_name': 'App', 'last_name': '', 'created_at': firebase_admin.firestore.SERVER_TIMESTAMP
+                    'uid': user.uid, 
+                    'email': user.email, 
+                    'role': 'independent',
+                    'first_name': 'App', 
+                    'last_name': '', 
+                    'created_at': firebase_admin.firestore.SERVER_TIMESTAMP
                 })
-        return {"message": "Synced"}
+                
+        return {"message": "Synced & Cleaned"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @app.post("/admin/upload-parser/{target_uid}")
 async def upload_parser_config(target_uid: str, file: UploadFile = File(...), requester_id: str = Depends(verify_admin)):
     try:

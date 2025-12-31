@@ -10,6 +10,7 @@ import '../services/notification_service.dart';
 import '../constants.dart';
 import 'home_screen.dart';
 import 'login_screen.dart'; // Ensure you import your LoginScreen
+import '../widgets/diet_logo.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -186,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset('assets/icon.png', width: 100, height: 100),
+            const DietLogo(size: 120),
             const SizedBox(height: 24),
             const CircularProgressIndicator(color: Colors.white),
             const SizedBox(height: 16),

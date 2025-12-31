@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_management_view.dart';
 import 'config_view.dart';
+import '../widgets/diet_logo.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -76,7 +77,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.spa, color: Colors.greenAccent[400], size: 28),
+                      const DietLogo(
+                        size: 40,
+                        isDarkBackground: true,
+                      ), // <--- YOUR LOGO
                       const SizedBox(width: 12),
                       const Text(
                         "MYDIET",

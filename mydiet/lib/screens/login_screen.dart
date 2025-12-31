@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,7 +20,12 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       await _auth.signInWithGoogle();
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        // Replace LoginScreen with MainScreen instead of popping
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -51,7 +57,12 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
 
-        if (mounted) Navigator.pop(context); // Close only if verified
+        if (mounted) {
+          // Replace LoginScreen with MainScreen instead of popping
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        }
       } else {
         // REGISTRATION FLOW
         await _auth.signUp(_emailCtrl.text.trim(), _passCtrl.text.trim());
