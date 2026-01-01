@@ -1,4 +1,4 @@
 {
   "python.analysis.extraPaths": ["./server"],
-  "cmake.sourceDirectory": "C:/Users/leooo/Documents/GitHub/MyDiet/mydiet/linux"
+  "cmake.sourceDirectory": "C:/Users/leooo/Documents/GitHub/MyDiet/admin/build/windows/x64/extracted/firebase_cpp_sdk_windows"
 }
