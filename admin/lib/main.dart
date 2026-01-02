@@ -4,25 +4,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // Assicurati di averlo
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/env.dart';
 
-// Importa i due file generati (usa i nomi che abbiamo creato prima)
 import 'firebase_options_dev.dart' as dev;
 import 'firebase_options_prod.dart' as prod;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 1. Carica le variabili (.env o .env.prod)
   await Env.init();
 
-  // 2. Scegli Firebase in base alla modalità
   final firebaseOptions = Env.isProd
       ? prod.DefaultFirebaseOptions.currentPlatform
       : dev.DefaultFirebaseOptions.currentPlatform;
 
-  // 3. Inizializza
   await Firebase.initializeApp(options: firebaseOptions);
   runApp(const AdminApp());
 }
@@ -33,17 +28,17 @@ class AdminApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MyDiet Control',
+      title: 'Kybo Admin',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF3F4F6),
+        scaffoldBackgroundColor: const Color(0xFFF5F5F5), // Kybo Light BG
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4F46E5),
-          primary: const Color(0xFF4F46E5),
-          secondary: const Color(0xFF10B981),
+          seedColor: const Color(0xFF2E7D32), // Kybo Green Primary
+          primary: const Color(0xFF2E7D32),
+          secondary: const Color(0xFFE65100), // Kybo Orange Accent
           surface: Colors.white,
-          background: const Color(0xFFF3F4F6),
+          background: const Color(0xFFF5F5F5),
         ),
         cardTheme: CardThemeData(
           elevation: 2,
@@ -56,10 +51,10 @@ class AdminApp extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
-          elevation: 1,
-          iconTheme: IconThemeData(color: Colors.black87),
+          elevation: 0,
+          iconTheme: IconThemeData(color: Color(0xFF2E7D32)),
           titleTextStyle: TextStyle(
-            color: Colors.black87,
+            color: Color(0xFF2E7D32),
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -74,6 +69,10 @@ class AdminApp extends StatelessWidget {
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 2),
           ),
         ),
       ),
@@ -118,10 +117,11 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passCtrl.text.trim(),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -130,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEEF2F6),
+      backgroundColor: const Color(0xFFF5F5F5),
       body: Center(
         child: Card(
           elevation: 8,
@@ -146,16 +146,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Icon(
                   Icons.admin_panel_settings,
                   size: 60,
-                  color: Color(0xFF4F46E5),
+                  color: Color(0xFF2E7D32), // Kybo Green
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  "MyDiet Command",
+                  "Kybo Admin",
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Accesso riservato al personale",
+                  "Accesso riservato",
                   style: TextStyle(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 32),
@@ -184,9 +184,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 50,
                   child: FilledButton(
                     onPressed: _isLoading ? null : _login,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32), // Kybo Green
+                    ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("ACCEDI"),
+                        : const Text("ACCEDI AL PANNELLO"),
                   ),
                 ),
               ],

@@ -802,17 +802,20 @@ class _UserManagementViewState extends State<UserManagementView> {
                 if (nutDoc != null)
                   Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: _UserCard(
-                      doc: nutDoc,
-                      onDelete: _deleteUser,
-                      onUploadDiet: _uploadDiet,
-                      onUploadParser: _uploadParser,
-                      onHistory: (_) {}, // Nut history irrelevant here
-                      onEdit: _editUser,
-                      onAssign: null,
-                      currentUserRole: _currentUserRole,
-                      currentUserId: _currentUserId,
-                      roleColor: _getRoleColor('nutritionist'),
+                    child: SizedBox(
+                      height: 240,
+                      child: _UserCard(
+                        doc: nutDoc,
+                        onDelete: _deleteUser,
+                        onUploadDiet: _uploadDiet,
+                        onUploadParser: _uploadParser,
+                        onHistory: (_) {},
+                        onEdit: _editUser,
+                        onAssign: null,
+                        currentUserRole: _currentUserRole,
+                        currentUserId: _currentUserId,
+                        roleColor: _getRoleColor('nutritionist'),
+                      ),
                     ),
                   ),
                 if (clients.isNotEmpty)

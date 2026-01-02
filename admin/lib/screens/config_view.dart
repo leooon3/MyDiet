@@ -274,27 +274,34 @@ class _ConfigViewState extends State<ConfigView> {
               children: [
                 Icon(statusIcon, color: statusBorder, size: 30),
                 const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      statusTitle,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: statusBorder,
+                // --- FIX INIZIA QUI ---
+                Expanded(
+                  // Aggiunto Expanded per prevenire overflow
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        statusTitle,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: statusBorder,
+                        ),
                       ),
-                    ),
-                    Text(
-                      detailedStatus,
-                      style: TextStyle(color: Colors.black87),
-                    ),
-                  ],
+                      Text(
+                        detailedStatus,
+                        style: const TextStyle(color: Colors.black87),
+                        overflow: TextOverflow
+                            .ellipsis, // Opzionale: taglia con ... se troppo lungo
+                        maxLines: 2, // Opzionale: max 2 righe
+                      ),
+                    ],
+                  ),
                 ),
+                // --- FIX FINISCE QUI ---
               ],
             ),
           ),
-
           const SizedBox(height: 20),
 
           // 2. MANUAL TOGGLE

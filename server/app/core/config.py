@@ -15,7 +15,8 @@ class Settings(BaseSettings):
         "http://localhost:4000",
         "http://localhost:5000",
         "https://mydiet-74rg.onrender.com",
-        "https://my-diet-admin.vercel.app"
+        "https://my-diet-admin.vercel.app",
+        "https://app.kybo.it"
     ]
 
     # Paths
