@@ -1,4 +1,4 @@
-# mydiet
+# Kybo
 
 A new Flutter project.
 

@@ -1,4 +1,4 @@
-package com.example.mydiet_admin
+package com.example.Kybo_admin
 
 import io.flutter.embedding.android.FlutterActivity
 

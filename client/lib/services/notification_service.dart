@@ -1,94 +1,90 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:io';
-import 'storage_service.dart';
-
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint("🌙 Background Notification: ${message.notification?.title}");
-}
+import '../services/storage_service.dart'; // Assicurati che l'import sia corretto
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  // Getter per inventory_service
+  FlutterLocalNotificationsPlugin get flutterLocalNotificationsPlugin =>
+      _localNotifications;
 
   bool _isInitialized = false;
 
   Future<void> init() async {
     if (_isInitialized) return;
 
-    tz.initializeTimeZones();
     try {
+      // 1. Inizializza Timezones (Fondamentale per gli allarmi orari)
+      tz.initializeTimeZones();
       final String timeZoneName = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(timeZoneName));
+
+      // 2. Setup Android
+      const AndroidInitializationSettings androidSettings =
+          AndroidInitializationSettings('@drawable/ic_stat_logo');
+
+      // 3. Setup iOS (Permessi base)
+      final DarwinInitializationSettings iosSettings =
+          DarwinInitializationSettings(
+            requestAlertPermission: true,
+            requestBadgePermission: true,
+            requestSoundPermission: true,
+          );
+
+      final InitializationSettings initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
+
+      await _localNotifications.initialize(initSettings);
+
+      // 4. Setup Firebase (Push esterne)
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        _showLocalNotification(message);
+      });
+
+      _isInitialized = true;
+      debugPrint("✅ Notification Service Initialized (con Timezones)");
     } catch (e) {
-      tz.setLocalLocation(tz.getLocation('UTC'));
+      debugPrint("⚠️ Notification Init Error: $e");
     }
-
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/launcher_icon');
-
-    const DarwinInitializationSettings initializationSettingsDarwin =
-        DarwinInitializationSettings(
-          requestSoundPermission: false,
-          requestBadgePermission: false,
-          requestAlertPermission: false,
-        );
-
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-          android: initializationSettingsAndroid,
-          iOS: initializationSettingsDarwin,
-        );
-
-    await flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse details) {
-        debugPrint("🔔 Notification Tapped: ${details.payload}");
-      },
-    );
-
-    await _setupFirebaseMessaging();
-
-    _isInitialized = true;
-    debugPrint("✅ Notification Service Initialized (Local + Push)");
   }
 
-  Future<void> _setupFirebaseMessaging() async {
-    NotificationSettings settings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('✅ Push Permissions Granted');
-      FirebaseMessaging.onBackgroundMessage(
-        _firebaseMessagingBackgroundHandler,
+  Future<void> requestPermissions() async {
+    try {
+      await _firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
       );
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('☀️ Foreground Message: ${message.notification?.title}');
-        if (message.notification != null) {
-          _showLocalNotification(
-            id: message.hashCode,
-            title: message.notification!.title ?? 'Nuova notifica',
-            body: message.notification!.body ?? '',
-          );
-        }
-      });
-    } else {
-      debugPrint('❌ Push Permissions Denied');
+
+      if (Platform.isAndroid) {
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.requestNotificationsPermission();
+
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.requestExactAlarmsPermission();
+      }
+    } catch (e) {
+      debugPrint("Permission Error: $e");
     }
   }
 
@@ -96,77 +92,58 @@ class NotificationService {
     try {
       return await _firebaseMessaging.getToken();
     } catch (e) {
-      debugPrint("⚠️ Error getting FCM Token: $e");
       return null;
     }
   }
 
-  Future<void> _showLocalNotification({
-    required int id,
-    required String title,
-    required String body,
-  }) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          'high_importance_channel',
-          'Avvisi Importanti',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
+  /// Mostra notifica push in primo piano
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    RemoteNotification? notification = message.notification;
+    AndroidNotification? android = message.notification?.android;
 
-    const NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
-    );
-
-    await flutterLocalNotificationsPlugin.show(id, title, body, details);
-  }
-
-  Future<void> requestPermissions() async {
-    if (Platform.isAndroid) {
-      final status = await Permission.scheduleExactAlarm.status;
-      if (status.isDenied) {
-        await Permission.scheduleExactAlarm.request();
-      }
+    if (notification != null && android != null) {
+      await _localNotifications.show(
+        notification.hashCode,
+        notification.title,
+        notification.body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'high_importance_channel',
+            'Notifiche Importanti',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+        ),
+      );
     }
   }
 
-  // --- GESTIONE ALLARMI DINAMICI ---
-
+  /// [RIPRISTINATO] Schedula gli allarmi salvati in locale
   Future<void> scheduleAllMeals() async {
-    await flutterLocalNotificationsPlugin.cancelAll();
+    if (!_isInitialized) await init();
 
+    // Cancelliamo i vecchi per non averne doppi
+    await _localNotifications.cancelAll();
+
+    // Carichiamo gli allarmi salvati dall'utente
     final storage = StorageService();
-    final alarms = await storage.loadAlarms();
+    List<Map<String, dynamic>> alarms = await storage.loadAlarms();
 
-    debugPrint("⏰ Scheduling ${alarms.length} alarms...");
+    debugPrint("⏰ Schedulazione ${alarms.length} allarmi...");
 
     for (var alarm in alarms) {
-      int id = alarm['id'] is int
-          ? alarm['id']
-          : int.tryParse(alarm['id'].toString()) ?? 0;
-      String label = alarm['label'] ?? "Pasto";
-      String time = alarm['time'] ?? "00:00";
-      String body = alarm['body'] ?? "È ora di mangiare!";
+      final int id =
+          alarm['id'] ?? DateTime.now().millisecondsSinceEpoch % 100000;
+      final String timeStr = alarm['time'] ?? "08:00";
+      final String title = alarm['label'] ?? "Pasto";
+      final String body = alarm['body'] ?? "È ora di mangiare!";
 
-      await _scheduleMeal(id, label, body, time);
-    }
-  }
-
-  Future<void> _scheduleMeal(
-    int id,
-    String title,
-    String body,
-    String timeStr,
-  ) async {
-    try {
+      // Parsing ora:minuti
       final parts = timeStr.split(":");
       final int hour = int.parse(parts[0]);
       final int minute = int.parse(parts[1]);
+
       await _scheduleDaily(id, title, body, hour, minute);
-      debugPrint("   -> Scheduled '$title' at $timeStr (ID: $id)");
-    } catch (e) {
-      debugPrint("⚠️ Error parsing time $timeStr for $title: $e");
     }
   }
 
@@ -177,50 +154,35 @@ class NotificationService {
     int hour,
     int minute,
   ) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          'meal_reminders_v2',
-          'Promemoria Pasti',
-          channelDescription: 'Ricorda i tuoi pasti giornalieri',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-
     try {
-      await flutterLocalNotificationsPlugin.zonedSchedule(
+      await _localNotifications.zonedSchedule(
         id,
         title,
         body,
-        _nextInstanceOfTime(hour, minute),
+        _nextInstanceOf(hour, minute),
         const NotificationDetails(
-          android: androidDetails,
+          android: AndroidNotificationDetails(
+            'daily_meals_channel',
+            'Promemoria Pasti',
+            channelDescription: 'Canale per gli allarmi dei pasti giornalieri',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
           iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
+        matchDateTimeComponents:
+            DateTimeComponents.time, // Ripeti ogni giorno alla stessa ora
       );
+      debugPrint("✅ Allarme impostato: $title alle $hour:$minute");
     } catch (e) {
-      debugPrint("⚠️ Exact Alarm Failed, using Inexact: $e");
-      await flutterLocalNotificationsPlugin.zonedSchedule(
-        id,
-        title,
-        body,
-        _nextInstanceOfTime(hour, minute),
-        const NotificationDetails(
-          android: androidDetails,
-          iOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
+      debugPrint("❌ Errore schedulazione $title: $e");
     }
   }
 
-  tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
+  tz.TZDateTime _nextInstanceOf(int hour, int minute) {
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
     tz.TZDateTime scheduledDate = tz.TZDateTime(
       tz.local,

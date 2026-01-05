@@ -4,9 +4,12 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:kybo_admin/core/env.dart';
 
 class AdminRepository {
-  final String _baseUrl = "https://mydiet-74rg.onrender.com";
+  String get _baseUrl => Env.isProd
+      ? "https://kybo.onrender.com"
+      : "https://Kybo-74rg.onrender.com";
 
   Future<String?> _getToken() async {
     return await FirebaseAuth.instance.currentUser?.getIdToken();
@@ -103,8 +106,9 @@ class AdminRepository {
         'last_name': lastName,
       }),
     );
-    if (response.statusCode != 200)
+    if (response.statusCode != 200) {
       throw Exception('Failed to create user: ${response.body}');
+    }
   }
 
   Future<void> updateUser(
@@ -173,8 +177,9 @@ class AdminRepository {
       Uri.parse('$_baseUrl/admin/delete-user/$uid'),
       headers: {'Authorization': 'Bearer $token'},
     );
-    if (response.statusCode != 200)
+    if (response.statusCode != 200) {
       throw Exception('Failed to delete user: ${response.body}');
+    }
   }
 
   Future<String> syncUsers() async {
@@ -183,8 +188,9 @@ class AdminRepository {
       Uri.parse('$_baseUrl/admin/sync-users'),
       headers: {'Authorization': 'Bearer $token'},
     );
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return jsonDecode(response.body)['message'] ?? "Sync completato.";
+    }
     throw Exception("Sync fallito: ${response.body}");
   }
 
@@ -205,8 +211,9 @@ class AdminRepository {
       ),
     );
     final response = await request.send();
-    if (response.statusCode != 200)
+    if (response.statusCode != 200) {
       throw Exception(await response.stream.bytesToString());
+    }
   }
 
   Future<void> uploadParserConfig(String targetUid, PlatformFile file) async {
@@ -226,7 +233,8 @@ class AdminRepository {
       ),
     );
     final response = await request.send();
-    if (response.statusCode != 200)
+    if (response.statusCode != 200) {
       throw Exception(await response.stream.bytesToString());
+    }
   }
 }

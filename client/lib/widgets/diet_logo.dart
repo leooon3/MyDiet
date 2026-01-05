@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
 class DietLogo extends StatelessWidget {
   final double size;
@@ -16,7 +15,7 @@ class DietLogo extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(0.2),
+            color: Colors.green.withValues(alpha: 0.2),
             blurRadius: 15,
             spreadRadius: 5,
             offset: const Offset(0, 5),

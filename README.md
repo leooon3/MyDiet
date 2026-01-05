@@ -1,6 +1,6 @@
-# 🥗 MyDiet
+# 🥗 Kybo
 
-**MyDiet** is a digital system for diet and pantry management.  
+**Kybo** is a digital system for diet and pantry management.  
 It converts nutritional plans from PDF into interactive schedules and automates shopping lists by scanning receipts.
 
 ---
@@ -11,7 +11,7 @@ It converts nutritional plans from PDF into interactive schedules and automates 
   Extracts meals, quantities, and days from unstructured PDF files using **Google Gemini AI**.
 
 - **Receipt Scanner**  
-  Adds products to the *Virtual Fridge* via **OCR** and **fuzzy string matching**.
+  Adds products to the _Virtual Fridge_ via **OCR** and **fuzzy string matching**.
 
 - **Smart Shopping List**  
   Automatically calculates necessary items by subtracting pantry inventory from the diet plan.
@@ -30,24 +30,29 @@ It converts nutritional plans from PDF into interactive schedules and automates 
 ## 🛠 Tech Stack
 
 ### Frontend
-- Flutter  
-- Provider (State Management)  
-- HTTP  
+
+- Flutter
+- Provider (State Management)
+- HTTP
 
 ### Backend
-- Python  
-- FastAPI  
-- Uvicorn  
+
+- Python
+- FastAPI
+- Uvicorn
 
 ### Hosting
+
 - Render (Backend)
 
 ### AI / OCR
-- Google Gemini (PDF Parsing)  
-- Tesseract OCR (Receipts)  
+
+- Google Gemini (PDF Parsing)
+- Tesseract OCR (Receipts)
 - TheFuzz (String Matching)
 
 ### Infrastructure
+
 - Firebase (Notifications)
 
 ---
@@ -55,9 +60,9 @@ It converts nutritional plans from PDF into interactive schedules and automates 
 ## ✅ Prerequisites
 
 - **Flutter SDK**
-- *(Optional – for local backend)*  
-  - Python 3.9+  
-  - Tesseract OCR  
+- _(Optional – for local backend)_
+  - Python 3.9+
+  - Tesseract OCR
 
 ---
 
@@ -66,6 +71,7 @@ It converts nutritional plans from PDF into interactive schedules and automates 
 ### 1️⃣ Backend
 
 #### Live Environment (Render)
+
 The backend is deployed on **Render**.  
 No local installation is required for the client app to function.
 
@@ -93,11 +99,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ### 2️⃣ Frontend (App)
 
 ```bash
-cd mydiet
+cd Kybo
 flutter pub get
 ```
 
-Create a `.env` file in `mydiet/assets/`:
+Create a `.env` file in `Kybo/assets/`:
 
 ```ini
 API_URL=https://<your-app-name>.onrender.com
@@ -105,8 +111,8 @@ API_URL=https://<your-app-name>.onrender.com
 
 #### Firebase Setup
 
-- **Android**: `mydiet/android/app/google-services.json`  
-- **iOS**: `mydiet/ios/Runner/GoogleService-Info.plist`
+- **Android**: `Kybo/android/app/google-services.json`
+- **iOS**: `Kybo/ios/Runner/GoogleService-Info.plist`
 
 Run:
 
@@ -118,8 +124,8 @@ flutter run
 
 ## 📖 Usage
 
-1. Upload a PDF diet plan  
-2. Add pantry items manually or by scanning receipts  
+1. Upload a PDF diet plan
+2. Add pantry items manually or by scanning receipts
 3. Generate a shopping list for selected days
 
 ---

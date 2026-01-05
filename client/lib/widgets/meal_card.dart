@@ -153,26 +153,27 @@ class MealCard extends StatelessWidget {
     String unit = "";
     String lower = rawQty.toLowerCase();
 
-    if (lower.contains('kg'))
+    if (lower.contains('kg')) {
       unit = "kg";
-    else if (lower.contains('mg'))
+    } else if (lower.contains('mg')) {
       unit = "mg";
-    else if (lower.contains('ml'))
+    } else if (lower.contains('ml')) {
       unit = "ml";
-    else if (lower.contains('l') && !lower.contains('ml'))
+    } else if (lower.contains('l') && !lower.contains('ml')) {
       unit = "L";
-    else if (RegExp(r'\b(gr|g|grammi)\b').hasMatch(lower))
+    } else if (RegExp(r'\b(gr|g|grammi)\b').hasMatch(lower)) {
       unit = "g";
-    else if (lower.contains('vasett'))
+    } else if (lower.contains('vasett')) {
       unit = "vasetto";
-    else if (lower.contains('cucchiain'))
+    } else if (lower.contains('cucchiain')) {
       unit = "cucchiaino";
-    else if (lower.contains('cucchiai'))
+    } else if (lower.contains('cucchiai')) {
       unit = "cucchiaio";
-    else if (lower.contains('fett'))
+    } else if (lower.contains('fett')) {
       unit = "fette";
-    else if (lower.contains('pz'))
+    } else if (lower.contains('pz')) {
       unit = "pz";
+    }
 
     if (number.isNotEmpty && unit.isNotEmpty) {
       return "$number $unit";
@@ -257,12 +258,12 @@ class MealCard extends StatelessWidget {
               String swapKey = "${day}_${mealName}_group_$groupIndex";
               bool isSwapped = activeSwaps.containsKey(swapKey);
 
-              Color bgColor = Colors.grey.withOpacity(0.05);
+              Color bgColor = Colors.grey.withValues(alpha: 0.05);
               Color? borderColor;
 
               if (!isConsumed) {
                 borderColor = isAvailable
-                    ? Colors.green.withOpacity(0.5)
+                    ? Colors.green.withValues(alpha: 0.5)
                     : Colors.transparent;
               }
 

@@ -8,7 +8,7 @@ class Env {
     try {
       await dotenv.load(fileName: fileName);
     } catch (e) {
-      print("Errore caricamento $fileName: $e");
+      debugPrint("Errore caricamento $fileName: $e");
     }
   }
 

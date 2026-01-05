@@ -1,43 +1,69 @@
-import 'dart:async'; // [IMPORT NEEDED FOR TIMER]
-import 'package:Kybo/core/env.dart';
-import 'package:Kybo/firebase_options_dev.dart' as dev;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options_dev.dart';
-
-import 'constants.dart';
-import 'firebase_options_dev.dart' as prod;
+import 'core/env.dart';
+import 'firebase_options_dev.dart' as dev;
+import 'firebase_options_prod.dart' as prod;
 import 'repositories/diet_repository.dart';
 import 'providers/diet_provider.dart';
 import 'screens/splash_screen.dart';
 import 'guards/password_guard.dart';
 import 'services/notification_service.dart';
+import 'constants.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+void main() {
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  await NotificationService().init();
-  await Env.init();
+      // 1. Env
+      await Env.init();
 
-  final firebaseOptions = Env.isProd
-      ? prod.DefaultFirebaseOptions.currentPlatform
-      : dev.DefaultFirebaseOptions.currentPlatform;
+      // 2. Init Firebase
+      try {
+        final firebaseOptions = Env.isProd
+            ? prod.DefaultFirebaseOptions.currentPlatform
+            : dev.DefaultFirebaseOptions.currentPlatform;
 
-  await Firebase.initializeApp(options: firebaseOptions);
+        if (Firebase.apps.isEmpty) {
+          await Firebase.initializeApp(options: firebaseOptions);
+        }
 
-  runApp(
-    MultiProvider(
-      providers: [
-        Provider(create: (_) => DietRepository()),
-        ChangeNotifierProvider<DietProvider>(
-          create: (context) => DietProvider(context.read<DietRepository>()),
+        // [IMPORTANTE] Abilita la persistenza offline di Firestore subito
+        FirebaseFirestore.instance.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        );
+      } catch (e) {
+        debugPrint("⚠️ Firebase Init Error: $e");
+      }
+
+      // 3. Avvio UI Immediato
+      runApp(
+        MultiProvider(
+          providers: [
+            Provider(create: (_) => DietRepository()),
+            ChangeNotifierProvider<DietProvider>(
+              create: (context) => DietProvider(context.read<DietRepository>()),
+            ),
+          ],
+          child: const DietApp(),
         ),
-      ],
-      child: const DietApp(),
-    ),
+      );
+
+      // 4. Avvio Notifiche "Lazy" (Non blocca l'app)
+      // Non aspettiamo il risultato, lo lasciamo andare in background
+      Future.delayed(const Duration(seconds: 3), () {
+        if (Firebase.apps.isNotEmpty) {
+          NotificationService().init();
+        }
+      });
+    },
+    (error, stack) {
+      debugPrint("🔴 Global Error: $error");
+    },
   );
 }
 
@@ -47,7 +73,7 @@ class DietApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MyDiet',
+      title: 'Kybo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -57,24 +83,9 @@ class DietApp extends StatelessWidget {
           secondary: AppColors.secondary,
           surface: AppColors.surface,
         ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          color: AppColors.surface,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: AppColors.inputFill,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-        ),
       ),
+      // Qui usiamo il MaintenanceGuard basato su Firestore
       builder: (context, child) {
-        // [UPDATE] Using the Stateful Guard with Timer
         return MaintenanceGuard(child: PasswordGuard(child: child!));
       },
       home: const SplashScreen(),
@@ -83,28 +94,32 @@ class DietApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------
-// 🛡️ MAINTENANCE GUARD WIDGET
+// 🛡️ MAINTENANCE GUARD (SOLO FIRESTORE)
 // -------------------------------------------------------
 class MaintenanceGuard extends StatelessWidget {
   final Widget child;
-
   const MaintenanceGuard({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
+    if (Firebase.apps.isEmpty) return child;
+
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('config')
           .doc('global')
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) {
+        // Se siamo offline, Firestore proverà a usare la cache.
+        // Se non ha cache o c'è errore, snapshot.hasError potrebbe essere true o connectionState waiting.
+        // IN OGNI CASO DI DUBBIO -> Lasciamo passare l'utente (Fail Open)
+
+        if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+          // Non blocchiamo l'utente se non riusciamo a leggere la config
           return child;
         }
 
         final data = snapshot.data!.data() as Map<String, dynamic>?;
-
-        // SECURE: We only trust the server's boolean flag.
         bool isMaintenance = data?['maintenance_mode'] ?? false;
 
         if (isMaintenance) {
@@ -121,24 +136,16 @@ class MaintenanceGuard extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    "Under Maintenance",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
+                    "Manutenzione",
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    padding: const EdgeInsets.all(20),
                     child: Text(
                       data?['maintenance_message'] ??
-                          "We are updating the system. Please wait.",
+                          "Sistema in aggiornamento.",
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.black54,
-                        fontSize: 16,
-                      ),
                     ),
                   ),
                 ],
@@ -146,7 +153,6 @@ class MaintenanceGuard extends StatelessWidget {
             ),
           );
         }
-
         return child;
       },
     );

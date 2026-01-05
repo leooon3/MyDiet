@@ -107,7 +107,7 @@ class _ConfigViewState extends State<ConfigView> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (date == null) return;
-
+    if (!mounted) return;
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
@@ -311,7 +311,7 @@ class _ConfigViewState extends State<ConfigView> {
               subtitle: const Text("Force maintenance mode ON immediately"),
               value: _manualMaintenance,
               onChanged: _toggleMaintenance,
-              activeColor: Colors.red,
+              activeThumbColor: Colors.red,
             ),
           ),
 

@@ -19,10 +19,11 @@ class AdminPasswordGuard extends StatelessWidget {
           .doc(user.uid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
+        }
 
         final data = snapshot.data!.data() as Map<String, dynamic>?;
         bool mustChange = data?['requires_password_change'] ?? false;

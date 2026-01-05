@@ -1,7 +1,7 @@
-import 'dart:convert'; // [NEW] Necessario per Deep Compare
-import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Necessario per Firestore
 import '../repositories/diet_repository.dart';
 import '../services/storage_service.dart';
 import '../services/firestore_service.dart';
@@ -82,8 +82,9 @@ Map<String, bool> _calculateAvailabilityIsolate(Map<String, dynamic> payload) {
         }
 
         if (isConsumed) {
-          for (int originalIdx in indices)
+          for (int originalIdx in indices) {
             newMap["${day}_${mType}_$originalIdx"] = false;
+          }
           continue;
         }
 
@@ -106,11 +107,13 @@ Map<String, bool> _calculateAvailabilityIsolate(Map<String, dynamic> payload) {
           }
           bool groupCovered = true;
           for (var item in swapItems) {
-            if (!_checkAndConsumeSimulatedStatic(item, simulatedFridge))
+            if (!_checkAndConsumeSimulatedStatic(item, simulatedFridge)) {
               groupCovered = false;
+            }
           }
-          for (int originalIdx in indices)
+          for (int originalIdx in indices) {
             newMap["${day}_${mType}_$originalIdx"] = groupCovered;
+          }
         } else {
           for (int i in indices) {
             final dish = dishes[i];
@@ -126,8 +129,9 @@ Map<String, bool> _calculateAvailabilityIsolate(Map<String, dynamic> payload) {
                 ];
               }
               for (var item in itemsToCheck) {
-                if (!_checkAndConsumeSimulatedStatic(item, simulatedFridge))
+                if (!_checkAndConsumeSimulatedStatic(item, simulatedFridge)) {
                   isCovered = false;
+                }
               }
             }
             newMap["${day}_${mType}_$i"] = isCovered;
@@ -147,18 +151,21 @@ List<List<int>> _buildGroupsStatic(List<dynamic> dishes) {
     String qty = d['qty']?.toString() ?? "";
     bool isHeader = (qty == "N/A");
     if (isHeader) {
-      if (currentGroupIndices.isNotEmpty)
+      if (currentGroupIndices.isNotEmpty) {
         groups.add(List.from(currentGroupIndices));
+      }
       currentGroupIndices = [i];
     } else {
-      if (currentGroupIndices.isNotEmpty)
+      if (currentGroupIndices.isNotEmpty) {
         currentGroupIndices.add(i);
-      else
+      } else {
         groups.add([i]);
+      }
     }
   }
-  if (currentGroupIndices.isNotEmpty)
+  if (currentGroupIndices.isNotEmpty) {
     groups.add(List.from(currentGroupIndices));
+  }
   return groups;
 }
 
@@ -174,8 +181,9 @@ bool _checkAndConsumeSimulatedStatic(
       ? (double.tryParse(match.group(1)!.replaceAll(',', '.')) ?? 1.0)
       : 1.0;
   if (iRawQty.contains('kg') ||
-      iRawQty.contains('l') && !iRawQty.contains('ml'))
+      iRawQty.contains('l') && !iRawQty.contains('ml')) {
     iQty *= 1000;
+  }
   if (iRawQty.contains('vasetto')) iQty = 125.0;
 
   String? foundKey;
@@ -211,9 +219,9 @@ class DietProvider extends ChangeNotifier {
   Map<String, bool> _availabilityMap = {};
   Map<String, double> _conversions = {};
 
-  // [NEW] Sync Tracking
+  // Sync Tracking
   DateTime _lastCloudSave = DateTime.fromMillisecondsSinceEpoch(0);
-  Map<String, dynamic>? _lastSyncedDiet; // Snapshot of last cloud state
+  Map<String, dynamic>? _lastSyncedDiet;
   Map<String, dynamic>? _lastSyncedSubstitutions;
   static const Duration _cloudSaveInterval = Duration(hours: 3);
 
@@ -233,36 +241,93 @@ class DietProvider extends ChangeNotifier {
   bool get hasError => _error != null;
 
   DietProvider(this._repository) {
-    _init();
+    // RIMOSSO _init() automatico per gestire cache e sync separatamente
   }
 
-  Future<void> _init() async {
+  // --- NUOVI METODI PER LA CACHE E SYNC ---
+
+  /// Carica i dati salvati nel telefono (Funziona Offline)
+  /// Ritorna true se ha trovato dati validi
+  Future<bool> loadFromCache() async {
+    bool hasData = false;
     try {
+      _setLoading(true);
+
       final savedDiet = await _storage.loadDiet();
-      if (savedDiet != null) {
-        _dietData = savedDiet['plan'];
-        _substitutions = savedDiet['substitutions'];
-        // Init baseline for comparison
-        _lastSyncedDiet = _deepCopy(_dietData);
-        _lastSyncedSubstitutions = _deepCopy(_substitutions);
-      }
       _pantryItems = await _storage.loadPantry();
       _activeSwaps = await _storage.loadSwaps();
       _conversions = await _storage.loadConversions();
-      _recalcAvailability();
+
+      if (savedDiet != null && savedDiet['plan'] != null) {
+        _dietData = savedDiet['plan'];
+        _substitutions = savedDiet['substitutions'];
+
+        // Init baseline for comparison
+        _lastSyncedDiet = _deepCopy(_dietData);
+        _lastSyncedSubstitutions = _deepCopy(_substitutions);
+
+        _recalcAvailability();
+        hasData = true;
+        debugPrint("📦 Dati caricati dalla Cache Locale");
+      }
     } catch (e) {
-      debugPrint("Init Load Error: $e");
+      debugPrint("Errore Cache: $e");
+    } finally {
+      _setLoading(false);
     }
     notifyListeners();
+    return hasData;
   }
 
-  // --- HELPERS DIET & UNIT ---
+  /// Scarica l'ultima dieta da Firebase (Se esiste e c'è rete)
+  /// Non blocca l'UI con loading indicator
+  Future<void> syncFromFirebase(String uid) async {
+    try {
+      // Usiamo Firestore per cercare l'ultimo salvataggio nella history
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('history')
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+
+        // Se i dati esistono, aggiorniamo lo stato
+        if (data['dietData'] != null) {
+          _dietData = data['dietData'];
+          _substitutions = data['substitutions'];
+
+          // Salviamo subito in locale per la prossima volta
+          await _storage.saveDiet({
+            'plan': _dietData,
+            'substitutions': _substitutions,
+          });
+
+          _lastSyncedDiet = _deepCopy(_dietData);
+          _lastSyncedSubstitutions = _deepCopy(_substitutions);
+          _lastCloudSave = DateTime.now();
+
+          _recalcAvailability();
+          notifyListeners();
+          debugPrint("☁️ Dati sincronizzati da Firebase");
+        }
+      }
+    } catch (e) {
+      debugPrint("⚠️ Sync Cloud fallito (possibile offline): $e");
+    }
+  }
+
+  // --- FINE NUOVI METODI ---
 
   double _normalizeToGrams(double qty, String unit, String itemName) {
     final u = unit.trim().toLowerCase();
     if (u == 'kg' || u == 'l') return qty * 1000;
-    if (u == 'g' || u == 'ml' || u == 'mg' || u == 'gr' || u == 'grammi')
+    if (u == 'g' || u == 'ml' || u == 'mg' || u == 'gr' || u == 'grammi') {
       return qty;
+    }
     if (u.contains('vasetto')) return qty * 125;
     if (u.contains('cucchiain')) return qty * 5;
     if (u.contains('cucchiaio')) return qty * 15;
@@ -286,27 +351,22 @@ class DietProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- CONSUMPTION ---
-
   Future<void> consumeMeal(String day, String mealType, int dishIndex) async {
     if (_dietData == null || _dietData![day] == null) return;
     final meals = _dietData![day][mealType];
     if (meals == null || meals is! List || dishIndex >= meals.length) return;
 
     List<List<int>> groups = _getGroups(meals);
-    int groupIndex = -1;
     List<int> targetGroupIndices = [];
 
     for (int g = 0; g < groups.length; g++) {
       if (groups[g].contains(dishIndex)) {
-        groupIndex = g;
         targetGroupIndices = groups[g];
         break;
       }
     }
     if (targetGroupIndices.isEmpty) return;
 
-    // Validation
     for (int i in targetGroupIndices) {
       final dish = meals[i];
       List<dynamic> itemsToCheck = [];
@@ -325,7 +385,6 @@ class DietProvider extends ChangeNotifier {
       }
     }
 
-    // Execution
     for (int i in targetGroupIndices) {
       final dish = meals[i];
       if ((dish['qty']?.toString() ?? "") == "N/A") {
@@ -355,7 +414,6 @@ class DietProvider extends ChangeNotifier {
 
     _dietData![day][mealType] = currentMealsList;
     _storage.saveDiet({'plan': _dietData, 'substitutions': _substitutions});
-    // Consumo solo locale (NO Cloud)
     _recalcAvailability();
     notifyListeners();
   }
@@ -382,13 +440,19 @@ class DietProvider extends ChangeNotifier {
       bool pIsWeight = pVal > 0;
       bool rIsWeight = rVal > 0;
 
-      if (pantryItem.unit.trim().toLowerCase() == reqUnit.trim().toLowerCase())
+      if (pantryItem.unit.trim().toLowerCase() ==
+          reqUnit.trim().toLowerCase()) {
         return;
+      }
       if (pIsWeight && rIsWeight) return;
-      if (pantryItem.unit.toLowerCase() == 'gr' && reqUnit.toLowerCase() == 'g')
+      if (pantryItem.unit.toLowerCase() == 'gr' &&
+          reqUnit.toLowerCase() == 'g') {
         return;
-      if (pantryItem.unit.toLowerCase() == 'g' && reqUnit.toLowerCase() == 'gr')
+      }
+      if (pantryItem.unit.toLowerCase() == 'g' &&
+          reqUnit.toLowerCase() == 'gr') {
         return;
+      }
 
       throw UnitMismatchException(
         item: pantryItem,
@@ -456,8 +520,6 @@ class DietProvider extends ChangeNotifier {
     return _buildGroupsStatic(meals);
   }
 
-  // --- SYNC & EDIT LOGIC ---
-
   void updateDietMeal(
     String day,
     String meal,
@@ -474,15 +536,12 @@ class DietProvider extends ChangeNotifier {
         currentMeals[idx] = {...oldItem, 'name': name, 'qty': qty};
         _dietData![day][meal] = currentMeals;
 
-        // 1. Sempre Salvataggio Locale
         _storage.saveDiet({'plan': _dietData, 'substitutions': _substitutions});
 
-        // 2. Controllo Cloud (3 ore + Contenuto Diverso)
         if (_auth.currentUser != null) {
           bool timePassed =
               DateTime.now().difference(_lastCloudSave) > _cloudSaveInterval;
           if (timePassed) {
-            // Deep comparison ignorando 'consumed'
             bool isStructurallyDifferent =
                 _hasStructuralChanges(_dietData, _lastSyncedDiet) ||
                 jsonEncode(_substitutions) !=
@@ -508,7 +567,6 @@ class DietProvider extends ChangeNotifier {
     }
   }
 
-  // Helper per rimuovere 'consumed' e 'cad_code' prima del confronto
   dynamic _sanitize(dynamic input) {
     if (input is Map) {
       final newMap = <String, dynamic>{};
@@ -540,8 +598,6 @@ class DietProvider extends ChangeNotifier {
     return jsonDecode(jsonEncode(input));
   }
 
-  // --- STANDARD METHODS ---
-
   void clearError() {
     _error = null;
     notifyListeners();
@@ -567,7 +623,6 @@ class DietProvider extends ChangeNotifier {
         'plan': _dietData,
         'substitutions': _substitutions,
       });
-      // Forza Sync Iniziale
       if (_auth.currentUser != null) {
         await _firestore.saveDietToHistory(_dietData!, _substitutions!);
         _lastCloudSave = DateTime.now();
@@ -598,8 +653,9 @@ class DietProvider extends ChangeNotifier {
           double qty = _parseQty(rawQty);
           String unit = _parseUnit(rawQty, item['name']);
           if (rawQty.toLowerCase().contains('l') &&
-              !rawQty.toLowerCase().contains('ml'))
+              !rawQty.toLowerCase().contains('ml')) {
             qty *= 1000;
+          }
           if (rawQty.toLowerCase().contains('kg')) qty *= 1000;
           addPantryItem(item['name'], qty, unit);
           count++;

@@ -284,7 +284,7 @@ class DietView extends StatelessWidget {
                     gramsPerUnit,
                   );
                 }
-
+                if (!context.mounted) return;
                 Navigator.pop(ctx);
                 _attemptConsume(context, provider, day, mealType, index);
               }

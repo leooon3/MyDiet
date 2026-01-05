@@ -1,10 +1,9 @@
-import 'package:Kybo_Admin/guards/admin_password_guard.dart';
-import 'package:Kybo_Admin/screens/dashboard_screen.dart';
+import 'package:kybo_admin/guards/admin_password_guard.dart';
+import 'package:kybo_admin/screens/dashboard_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/env.dart';
 
 import 'firebase_options_dev.dart' as dev;
@@ -38,7 +37,6 @@ class AdminApp extends StatelessWidget {
           primary: const Color(0xFF2E7D32),
           secondary: const Color(0xFFE65100), // Kybo Orange Accent
           surface: Colors.white,
-          background: const Color(0xFFF5F5F5),
         ),
         cardTheme: CardThemeData(
           elevation: 2,

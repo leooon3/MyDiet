@@ -10,7 +10,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: ./mydiet
+        working-directory: ./Kybo
 
     steps:
       - uses: actions/checkout@v4
@@ -105,10 +105,10 @@ jobs:
         run: |
           mkdir -p Payload
           mv build/ios/iphoneos/Runner.app Payload/
-          zip -r MyDiet_Unsigned.ipa Payload
+          zip -r Kybo_Unsigned.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: MyDiet-IPA
-          path: mydiet/MyDiet_Unsigned.ipa
+          name: Kybo-IPA
+          path: Kybo/Kybo_Unsigned.ipa

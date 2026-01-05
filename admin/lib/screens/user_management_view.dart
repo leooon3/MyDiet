@@ -69,18 +69,20 @@ class _UserManagementViewState extends State<UserManagementView> {
     setState(() => _isLoading = true);
     try {
       String msg = await _repo.syncUsers();
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: Colors.blue),
         );
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Sync Error: $e"),
             backgroundColor: Colors.red,
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -113,15 +115,17 @@ class _UserManagementViewState extends State<UserManagementView> {
       setState(() => _isLoading = true);
       try {
         await _repo.deleteUser(uid);
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text("Utente eliminato.")));
+        }
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text("Errore: $e")));
+        }
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -137,21 +141,23 @@ class _UserManagementViewState extends State<UserManagementView> {
       setState(() => _isLoading = true);
       try {
         await _repo.uploadDietForUser(targetUid, result.files.single);
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text("Dieta caricata!"),
               backgroundColor: Colors.green,
             ),
           );
+        }
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text("Errore upload: $e"),
               backgroundColor: Colors.red,
             ),
           );
+        }
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -226,18 +232,20 @@ class _UserManagementViewState extends State<UserManagementView> {
                   firstName: firstCtrl.text,
                   lastName: lastCtrl.text,
                 );
-                if (mounted)
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Utente aggiornato")),
                   );
+                }
               } catch (e) {
-                if (mounted)
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text("Errore: $e"),
                       backgroundColor: Colors.red,
                     ),
                   );
+                }
               } finally {
                 if (mounted) setState(() => _isLoading = false);
               }
@@ -262,10 +270,10 @@ class _UserManagementViewState extends State<UserManagementView> {
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
           title: const Text("Assegna a Nutrizionista"),
           content: DropdownButtonFormField<String>(
-            value: selectedNutId,
+            initialValue: selectedNutId,
             isExpanded: true,
             items: nutritionists.entries
                 .map(
@@ -292,18 +300,20 @@ class _UserManagementViewState extends State<UserManagementView> {
                     targetUid,
                     selectedNutId!,
                   );
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Utente assegnato!")),
                     );
+                  }
                 } catch (e) {
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text("Errore: $e"),
                         backgroundColor: Colors.red,
                       ),
                     );
+                  }
                 } finally {
                   if (mounted) setState(() => _isLoading = false);
                 }
@@ -327,7 +337,7 @@ class _UserManagementViewState extends State<UserManagementView> {
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
           title: const Text("Gestisci Assegnazione"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -339,7 +349,7 @@ class _UserManagementViewState extends State<UserManagementView> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: selectedNutId,
+                initialValue: selectedNutId,
                 isExpanded: true,
                 items: nutritionists.entries
                     .map(
@@ -368,20 +378,22 @@ class _UserManagementViewState extends State<UserManagementView> {
                     setState(() => _isLoading = true);
                     try {
                       await _repo.unassignUser(targetUid);
-                      if (mounted)
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text("Utente rimosso dal nutrizionista."),
                           ),
                         );
+                      }
                     } catch (e) {
-                      if (mounted)
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text("Errore: $e"),
                             backgroundColor: Colors.red,
                           ),
                         );
+                      }
                     } finally {
                       if (mounted) setState(() => _isLoading = false);
                     }
@@ -405,18 +417,20 @@ class _UserManagementViewState extends State<UserManagementView> {
                     targetUid,
                     selectedNutId!,
                   );
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Utente trasferito!")),
                     );
+                  }
                 } catch (e) {
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text("Errore: $e"),
                         backgroundColor: Colors.red,
                       ),
                     );
+                  }
                 } finally {
                   if (mounted) setState(() => _isLoading = false);
                 }
@@ -457,7 +471,7 @@ class _UserManagementViewState extends State<UserManagementView> {
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
           title: const Text("Nuovo Utente"),
           content: SingleChildScrollView(
             child: SizedBox(
@@ -502,7 +516,7 @@ class _UserManagementViewState extends State<UserManagementView> {
                   ),
                   const SizedBox(height: 24),
                   DropdownButtonFormField<String>(
-                    value: role,
+                    initialValue: role,
                     decoration: const InputDecoration(labelText: "Ruolo"),
                     items: allowedRoles,
                     onChanged: (v) => setDialogState(() => role = v!),
@@ -528,15 +542,17 @@ class _UserManagementViewState extends State<UserManagementView> {
                     firstName: nameCtrl.text,
                     lastName: surnameCtrl.text,
                   );
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Utente creato!")),
                     );
+                  }
                 } catch (e) {
-                  if (mounted)
+                  if (mounted) {
                     ScaffoldMessenger.of(
                       context,
                     ).showSnackBar(SnackBar(content: Text("Errore: $e")));
+                  }
                 } finally {
                   if (mounted) setState(() => _isLoading = false);
                 }
@@ -579,7 +595,10 @@ class _UserManagementViewState extends State<UserManagementView> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+              ),
             ],
           ),
           child: Row(
@@ -649,8 +668,9 @@ class _UserManagementViewState extends State<UserManagementView> {
             stream: _getUsersStream(),
             builder: (context, snapshot) {
               if (snapshot.hasError) return Text('Err: ${snapshot.error}');
-              if (!snapshot.hasData)
+              if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
+              }
 
               var allDocs = snapshot.data!.docs;
 
@@ -661,8 +681,9 @@ class _UserManagementViewState extends State<UserManagementView> {
                 if (d['role'] == 'nutritionist') {
                   nutNameMap[doc.id] =
                       "${d['first_name'] ?? ''} ${d['last_name'] ?? ''}".trim();
-                  if (nutNameMap[doc.id]!.isEmpty)
+                  if (nutNameMap[doc.id]!.isEmpty) {
                     nutNameMap[doc.id] = d['email'] ?? 'Unknown';
+                  }
                 }
               }
 
@@ -677,8 +698,9 @@ class _UserManagementViewState extends State<UserManagementView> {
 
                 if (_currentUserRole == 'admin' &&
                     _roleFilter != 'all' &&
-                    role != _roleFilter)
+                    role != _roleFilter) {
                   return false;
+                }
                 if (_searchQuery.isNotEmpty) {
                   return name.contains(_searchQuery) ||
                       email.contains(_searchQuery);
@@ -790,7 +812,7 @@ class _UserManagementViewState extends State<UserManagementView> {
             elevation: 2,
             child: ExpansionTile(
               leading: CircleAvatar(
-                backgroundColor: Colors.blue.withOpacity(0.2),
+                backgroundColor: Colors.blue.withValues(alpha: 0.2),
                 child: const Icon(Icons.health_and_safety, color: Colors.blue),
               ),
               title: Text(
@@ -997,7 +1019,7 @@ class _UserCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: roleColor.withOpacity(0.2),
+                  backgroundColor: roleColor.withValues(alpha: 0.2),
                   child: Text(
                     name.isNotEmpty ? name[0].toUpperCase() : "?",
                     style: TextStyle(
@@ -1042,7 +1064,7 @@ class _UserCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: roleColor.withOpacity(0.1),
+                    color: roleColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -1212,16 +1234,18 @@ class _UserHistoryScreen extends StatelessWidget {
               ),
             );
           }
-          if (!snapshot.hasData)
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
 
           final docs = snapshot.data!.docs;
-          if (docs.isEmpty)
+          if (docs.isEmpty) {
             return const Center(child: Text("Nessuna dieta precedente."));
+          }
 
           return ListView.separated(
             itemCount: docs.length,
-            separatorBuilder: (_, __) => const Divider(),
+            separatorBuilder: (_, _) => const Divider(),
             itemBuilder: (ctx, i) {
               final data = docs[i].data() as Map<String, dynamic>;
               final date =
@@ -1326,7 +1350,7 @@ class _ParserConfigScreenState extends State<_ParserConfigScreen> {
   final AdminRepository _repo = AdminRepository();
   bool _isLoading = false;
 
-  Future<void> _uploadNew(BuildContext context) async {
+  Future<void> _uploadNew() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['txt'],
@@ -1335,15 +1359,18 @@ class _ParserConfigScreenState extends State<_ParserConfigScreen> {
       setState(() => _isLoading = true);
       try {
         await _repo.uploadParserConfig(widget.targetUid, result.files.single);
-        if (mounted)
+        // Ora 'mounted' garantisce che il 'context' della classe sia valido
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Configurazione aggiornata!")),
           );
+        }
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text("Errore: $e"), backgroundColor: Colors.red),
           );
+        }
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -1363,7 +1390,7 @@ class _ParserConfigScreenState extends State<_ParserConfigScreen> {
               child: FilledButton.icon(
                 icon: const Icon(Icons.upload),
                 label: const Text("Carica Nuova Configurazione (.txt)"),
-                onPressed: _isLoading ? null : () => _uploadNew(context),
+                onPressed: _isLoading ? null : () => _uploadNew(),
               ),
             ),
           ),
@@ -1376,8 +1403,9 @@ class _ParserConfigScreenState extends State<_ParserConfigScreen> {
                   .doc(widget.targetUid)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
                 final user = snapshot.data!.data() as Map<String, dynamic>;
                 final current = user['custom_parser_prompt'] as String?;
 
@@ -1411,18 +1439,20 @@ class _ParserConfigScreenState extends State<_ParserConfigScreen> {
                                   .orderBy('uploaded_at', descending: true)
                                   .snapshots(),
                               builder: (ctx, histSnap) {
-                                if (!histSnap.hasData)
+                                if (!histSnap.hasData) {
                                   return const Center(
                                     child: CircularProgressIndicator(),
                                   );
+                                }
                                 final docs = histSnap.data!.docs;
-                                if (docs.isEmpty)
+                                if (docs.isEmpty) {
                                   return const Center(
                                     child: Text("Nessuna cronologia."),
                                   );
+                                }
                                 return ListView.separated(
                                   itemCount: docs.length,
-                                  separatorBuilder: (_, __) => const Divider(),
+                                  separatorBuilder: (_, _) => const Divider(),
                                   itemBuilder: (c, i) {
                                     final h =
                                         docs[i].data() as Map<String, dynamic>;
@@ -1437,11 +1467,7 @@ class _ParserConfigScreenState extends State<_ParserConfigScreen> {
                                         ).format(date),
                                       ),
                                       subtitle: Text(
-                                        (h['content'] as String).substring(
-                                              0,
-                                              50,
-                                            ) +
-                                            "...",
+                                        "${(h['content'] as String).substring(0, 50)}...",
                                       ),
                                       onTap: () {
                                         showDialog(

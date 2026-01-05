@@ -83,7 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ), // <--- YOUR LOGO
                       const SizedBox(width: 12),
                       const Text(
-                        "MYDIET",
+                        "Kybo",
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 20,

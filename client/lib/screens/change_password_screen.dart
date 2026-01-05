@@ -45,6 +45,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         {'requires_password_change': false},
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Errore: $e")));

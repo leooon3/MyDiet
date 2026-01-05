@@ -202,14 +202,16 @@ class _ShoppingListViewState extends State<ShoppingListView> {
           String qty = food['qty']?.toString() ?? "";
           bool isHeader = qty == "N/A";
           if (isHeader) {
-            if (currentGroup.isNotEmpty)
+            if (currentGroup.isNotEmpty) {
               groupedFoods.add(List.from(currentGroup));
+            }
             currentGroup = [food];
           } else {
-            if (currentGroup.isNotEmpty)
+            if (currentGroup.isNotEmpty) {
               currentGroup.add(food);
-            else
+            } else {
               groupedFoods.add([food]);
+            }
           }
         }
         if (currentGroup.isNotEmpty) groupedFoods.add(List.from(currentGroup));
@@ -287,10 +289,14 @@ class _ShoppingListViewState extends State<ShoppingListView> {
       if (pantryMatch != null) {
         existingQty = pantryMatch.quantity;
         // Normalizzazione unità (Kg -> g, L -> ml)
-        if (pantryMatch.unit.toLowerCase() == 'kg' && unit.toLowerCase() == 'g')
+        if (pantryMatch.unit.toLowerCase() == 'kg' &&
+            unit.toLowerCase() == 'g') {
           existingQty *= 1000;
-        if (pantryMatch.unit.toLowerCase() == 'l' && unit.toLowerCase() == 'ml')
+        }
+        if (pantryMatch.unit.toLowerCase() == 'l' &&
+            unit.toLowerCase() == 'ml') {
           existingQty *= 1000;
+        }
       }
 
       double finalQty = neededQty - existingQty;
@@ -302,11 +308,13 @@ class _ShoppingListViewState extends State<ShoppingListView> {
           double consumed = neededQty;
           // De-normalizzazione per salvataggio
           if (pantryMatch.unit.toLowerCase() == 'kg' &&
-              unit.toLowerCase() == 'g')
+              unit.toLowerCase() == 'g') {
             consumed /= 1000;
+          }
           if (pantryMatch.unit.toLowerCase() == 'l' &&
-              unit.toLowerCase() == 'ml')
+              unit.toLowerCase() == 'ml') {
             consumed /= 1000;
+          }
 
           pantryMatch.quantity = (pantryMatch.quantity - consumed).clamp(
             0.0,
@@ -358,8 +366,9 @@ class _ShoppingListViewState extends State<ShoppingListView> {
       String numPart = match.group(1)!.replaceAll(',', '.');
       qty = double.tryParse(numPart) ?? 0.0;
       unit = qtyStr.replaceAll(match.group(0)!, '').trim();
-      if (name.toLowerCase().contains(unit.toLowerCase()) && unit.length > 2)
+      if (name.toLowerCase().contains(unit.toLowerCase()) && unit.length > 2) {
         unit = "";
+      }
     } else {
       unit = qtyStr;
     }
@@ -373,8 +382,9 @@ class _ShoppingListViewState extends State<ShoppingListView> {
 
     if (agg.containsKey(cleanName)) {
       agg[cleanName]!['qty'] += qty;
-      if (agg[cleanName]!['unit'] == "" && unit.isNotEmpty)
+      if (agg[cleanName]!['unit'] == "" && unit.isNotEmpty) {
         agg[cleanName]!['unit'] = unit;
+      }
     } else {
       agg[cleanName] = {'qty': qty, 'unit': unit};
     }

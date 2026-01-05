@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 // --- CONFIGURAZIONE SERVER ---
 // IMPORTANTE: Sostituisci con il TUO indirizzo IP locale aggiornato
-const String serverUrl = 'https://mydiet-74rg.onrender.com';
+const String serverUrl = 'https://Kybo-74rg.onrender.com';
 
 // --- THEME COLORS ---
 class AppColors {

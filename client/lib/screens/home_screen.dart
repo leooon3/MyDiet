@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -46,15 +48,52 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       vsync: this,
     );
 
-    FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user != null) {
-        _saveFCMToken(user.uid);
-      }
+    // [MODIFICA] Avvio logica di caricamento sequenziale (Cache -> Cloud)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initAppData();
     });
+  }
+
+  /// Carica i dati in sequenza: Cache (Offline) e poi Cloud (Sync)
+  Future<void> _initAppData() async {
+    final provider = context.read<DietProvider>();
+    final user = FirebaseAuth.instance.currentUser;
+
+    // 1. CARICAMENTO CACHE (Istantaneo)
+    bool hasCache = await provider.loadFromCache();
+
+    // 2. SINCRONIZZAZIONE CLOUD
+    if (user != null) {
+      // [MODIFICA] Ritardiamo il salvataggio del token di 5 secondi
+      // Così non va in conflitto con l'inizializzazione del main.dart
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          _saveFCMToken(
+            user.uid,
+          ).catchError((e) => debugPrint("FCM Error: $e"));
+        }
+      });
+
+      // Sync in background
+      await provider.syncFromFirebase(user.uid);
+    } else if (!hasCache) {
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    }
   }
 
   Future<void> _saveFCMToken(String uid) async {
     try {
+      // 1. Check rapido: se non c'è rete, non provare neanche
+      try {
+        final result = await InternetAddress.lookup('google.com');
+        if (result.isEmpty || result[0].rawAddress.isEmpty) return;
+      } catch (_) {
+        return; // Offline -> Esci silenziosamente
+      }
+
+      // 2. Se siamo online, prova a prendere il token
       final token = await NotificationService().getFCMToken();
       if (token != null) {
         await FirebaseFirestore.instance.collection('users').doc(uid).update({
@@ -62,26 +101,32 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         });
       }
     } catch (e) {
-      debugPrint("FCM Token Error: $e");
+      // Silenzia errori "Remote Config" o "Network"
+      debugPrint("FCM Token Skip (Offline/Error): $e");
     }
   }
 
   Future<void> _uploadDiet(BuildContext context) async {
     final provider = context.read<DietProvider>();
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    // Salviamo il riferimento allo ScaffoldMessenger PRIMA dell'await
+    final messenger = ScaffoldMessenger.of(context);
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );
 
+    // Controllo mounted obbligatorio
     if (!mounted) return;
 
     if (result != null && result.files.single.path != null) {
       try {
         await provider.uploadDiet(result.files.single.path!);
+
+        // Controllo mounted dopo il secondo await
         if (!mounted) return;
-        scaffoldMessenger.showSnackBar(
+
+        messenger.showSnackBar(
           const SnackBar(
             content: Text("Dieta caricata e salvata!"),
             backgroundColor: AppColors.primary,
@@ -90,7 +135,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       } catch (e) {
         if (!mounted) return;
         String msg = provider.error ?? "Errore sconosciuto";
-        scaffoldMessenger.showSnackBar(
+        messenger.showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: Colors.red),
         );
       }
@@ -227,7 +272,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _openTimeSettings(BuildContext context) async {
+  Future<void> _openTimeSettings() async {
     final storage = StorageService();
     List<Map<String, dynamic>> alarms = await storage.loadAlarms();
 
@@ -237,8 +282,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
-            void _addAlarm() {
+          builder: (innerCtx, setDialogState) {
+            void addAlarm() {
               setDialogState(() {
                 alarms.add({
                   'id': DateTime.now().millisecondsSinceEpoch % 100000,
@@ -249,13 +294,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               });
             }
 
-            void _removeAlarm(int index) {
+            void removeAlarm(int index) {
               setDialogState(() {
                 alarms.removeAt(index);
               });
             }
 
-            void _restoreDefaults() {
+            void restoreDefaults() {
               setDialogState(() {
                 alarms = [
                   {
@@ -290,7 +335,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.restore, color: Colors.grey),
-                        onPressed: _restoreDefaults,
+                        onPressed: restoreDefaults,
                         tooltip: "Ripristina",
                       ),
                       IconButton(
@@ -298,7 +343,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           Icons.add_circle,
                           color: AppColors.primary,
                         ),
-                        onPressed: _addAlarm,
+                        onPressed: addAlarm,
                         tooltip: "Aggiungi",
                       ),
                     ],
@@ -348,7 +393,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                         ),
                                         onPressed: () async {
                                           final picked = await showTimePicker(
-                                            context: context,
+                                            context: innerCtx,
                                             initialTime: time,
                                           );
                                           if (picked != null) {
@@ -364,7 +409,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                           Icons.close,
                                           color: Colors.red,
                                         ),
-                                        onPressed: () => _removeAlarm(index),
+                                        onPressed: () => removeAlarm(index),
                                       ),
                                     ],
                                   ),
@@ -438,7 +483,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       children: [
         Scaffold(
           appBar: AppBar(
-            title: const Text("MyDiet"),
+            title: const Text("Kybo"),
             actions: [
               if (_currentIndex == 0)
                 IconButton(
@@ -497,12 +542,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildDrawer(
-    BuildContext context,
+    BuildContext drawerCtx,
     User? user,
     DietProvider provider,
     ColorScheme colors,
   ) {
-    // --- REALTIME ROLE LISTENER ---
     return StreamBuilder<DocumentSnapshot>(
       stream: user != null
           ? FirebaseFirestore.instance
@@ -510,8 +554,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 .doc(user.uid)
                 .snapshots()
           : const Stream.empty(),
-      builder: (context, snapshot) {
-        String role = 'user'; // Default to user (no upload)
+      builder: (streamCtx, snapshot) {
+        String role = 'user';
         if (snapshot.hasData && snapshot.data!.exists) {
           role =
               (snapshot.data!.data() as Map<String, dynamic>)['role'] ?? 'user';
@@ -524,7 +568,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             padding: EdgeInsets.zero,
             children: [
               UserAccountsDrawerHeader(
-                accountName: const Text("MyDiet"),
+                accountName: const Text("Kybo"),
                 accountEmail: Text("${user?.email ?? "Ospite"}\n(Role: $role)"),
                 currentAccountPicture: CircleAvatar(
                   backgroundColor: Colors.white,
@@ -537,9 +581,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   leading: const Icon(Icons.login),
                   title: const Text("Accedi / Registrati"),
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.pop(drawerCtx);
                     Navigator.pushReplacement(
-                      context,
+                      drawerCtx,
                       MaterialPageRoute(builder: (_) => const LoginScreen()),
                     );
                   },
@@ -549,18 +593,23 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   leading: const Icon(Icons.history),
                   title: const Text("Cronologia Diete"),
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.pop(drawerCtx);
                     Navigator.push(
-                      context,
+                      drawerCtx,
                       MaterialPageRoute(builder: (_) => const HistoryScreen()),
                     );
                   },
                 ),
+                // [MODIFICA] Logout con pulizia cache locale
                 ListTile(
                   leading: const Icon(Icons.logout),
                   title: const Text("Esci"),
                   onTap: () async {
-                    Navigator.pop(context);
+                    Navigator.pop(drawerCtx);
+
+                    // Pulizia Cache
+                    await provider.clearData();
+
                     await _auth.signOut();
                     if (mounted) {
                       Navigator.of(context).pushReplacement(
@@ -571,19 +620,18 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 ),
               ],
               const Divider(),
-              // Dynamic Visibility
               if (canUpload)
                 ListTile(
                   leading: const Icon(Icons.upload_file),
                   title: const Text("Carica Dieta PDF"),
-                  onTap: () => _uploadDiet(context),
+                  onTap: () => _uploadDiet(drawerCtx),
                 ),
               ListTile(
                 leading: const Icon(Icons.notifications_active),
                 title: const Text("Gestisci Allarmi"),
                 onTap: () {
-                  Navigator.pop(context);
-                  _openTimeSettings(context);
+                  Navigator.pop(drawerCtx);
+                  _openTimeSettings();
                 },
               ),
               const Divider(),
@@ -592,7 +640,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 title: const Text("Reset Dati Locali"),
                 onTap: () {
                   provider.clearData();
-                  Navigator.pop(context);
+                  Navigator.pop(drawerCtx);
                 },
               ),
             ],
@@ -642,13 +690,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   ),
                 );
               } catch (e) {
-                if (mounted)
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text("Errore: ${provider.error ?? e}"),
                       backgroundColor: Colors.red,
                     ),
                   );
+                }
               }
             }
           },

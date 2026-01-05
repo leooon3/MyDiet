@@ -70,6 +70,8 @@ class HistoryScreen extends StatelessWidget {
                                 await firestore.deleteDiet(
                                   diet['id'],
                                 ); // Calls the new method
+                                if (!context.mounted) return;
+
                                 Navigator.pop(c);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
