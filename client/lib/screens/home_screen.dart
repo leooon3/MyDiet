@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:shared_preferences/shared_preferences.dart'; // Tutorial commented out
-// import 'package:showcaseview/showcaseview.dart'; // Tutorial commented out
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 import '../providers/diet_provider.dart';
 import '../services/notification_service.dart';
@@ -12,6 +12,7 @@ import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import '../constants.dart';
 import '../core/error_handler.dart';
+import '../widgets/diet_logo.dart';
 import 'diet_view.dart';
 import 'pantry_view.dart';
 import 'shopping_list_view.dart';
@@ -19,45 +20,41 @@ import 'login_screen.dart';
 import 'history_screen.dart';
 import 'change_password_screen.dart';
 
-/*
-// 1. WRAPPER PRINCIPALE (Tutorial - Commented Out)
-class MainScreen extends StatefulWidget {
+// --- 1. WRAPPER PRINCIPALE ---
+class MainScreen extends StatelessWidget {
   const MainScreen({super.key});
 
-  @override
-  State<MainScreen> createState() => _MainScreenStateWrapper();
-}
-
-class _MainScreenStateWrapper extends State<MainScreen> {
-  // ... tutorial logic ...
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
-       builder: (context) => const MainScreenContent(),
+      autoPlay: false,
+      blurValue: 1,
+      builder: (context) => const MainScreenContent(),
     );
   }
 }
-*/
 
-// Ripristino MainScreen originale come richiesto
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+// --- 2. CONTENUTO DELLA SCHERMATA ---
+class MainScreenContent extends StatefulWidget {
+  const MainScreenContent({super.key});
+
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<MainScreenContent> createState() => _MainScreenContentState();
 }
 
-class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
+class _MainScreenContentState extends State<MainScreenContent>
+    with TickerProviderStateMixin {
   int _currentIndex = 1;
   late TabController _tabController;
   final AuthService _auth = AuthService();
 
-  // Tutorial Keys (Commented out but kept for future)
-  /*
+  // CHIAVI TUTORIAL
   final GlobalKey _menuKey = GlobalKey();
   final GlobalKey _tranquilKey = GlobalKey();
-  final GlobalKey _pantryBodyKey = GlobalKey();
-  final GlobalKey _shoppingListKey = GlobalKey();
-  */
+  final GlobalKey _pantryTabKey = GlobalKey();
+  final GlobalKey _shoppingTabKey = GlobalKey();
+
+  String _menuTutorialDescription = 'Qui trovi le impostazioni e lo storico.';
 
   final List<String> days = [
     "Lunedì",
@@ -78,31 +75,89 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       initialIndex: today < 0 ? 0 : today,
       vsync: this,
     );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initAppData();
-      // _checkTutorial(); // Tutorial disabled
+      _checkTutorial();
     });
   }
 
   Future<void> _initAppData() async {
+    if (!mounted) return;
     final provider = context.read<DietProvider>();
     await provider.loadFromCache();
+
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       provider.syncFromFirebase(user.uid);
     }
+
+    final storage = StorageService();
+    try {
+      // Gestione sicura del caricamento allarmi (ritorna List<Map> o dynamic)
+      var data = await storage.loadAlarms();
+      if (data is List && data.isNotEmpty) {
+        final notifs = NotificationService();
+        await notifs.init();
+        await notifs.scheduleAllMeals();
+      }
+    } catch (_) {}
   }
 
-  /*
-  // --- LOGICA TUTORIAL (Commented out) ---
+  // --- LOGICA TUTORIAL ---
   Future<void> _checkTutorial() async {
-     // ... logic ...
+    final prefs = await SharedPreferences.getInstance();
+    // Cambia la chiave 'v9' se vuoi testarlo di nuovo
+    bool seen = prefs.getBool('seen_tutorial_v9') ?? false;
+
+    if (!seen) {
+      _startShowcase();
+    }
   }
-  */
+
+  Future<void> _startShowcase() async {
+    final user = FirebaseAuth.instance.currentUser;
+    String role = 'client';
+
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (doc.exists) role = doc.data()?['role'] ?? 'client';
+      } catch (_) {}
+    }
+
+    if (role == 'independent' || role == 'admin') {
+      _menuTutorialDescription =
+          "Qui puoi:\n• Caricare la tua Dieta\n• Gestire Notifiche\n• Vedere lo Storico";
+    } else {
+      _menuTutorialDescription =
+          "Qui puoi:\n• Gestire le Notifiche\n• Vedere lo Storico delle diete passate";
+    }
+
+    if (mounted) {
+      ShowCaseWidget.of(
+        context,
+      ).startShowCase([_menuKey, _tranquilKey, _pantryTabKey, _shoppingTabKey]);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('seen_tutorial_v9', true);
+    }
+  }
+
+  // Tasto reset per i test (opzionale, richiamabile dal drawer)
+  Future<void> _resetTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('seen_tutorial_v9', false);
+    _startShowcase();
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<DietProvider>();
+    final user = FirebaseAuth.instance.currentUser;
 
     if (provider.error != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -128,17 +183,43 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 ),
               ),
               iconTheme: const IconThemeData(color: Colors.black),
+
+              // MENU HAMBURGER (Showcase #1)
+              leading: Builder(
+                builder: (context) {
+                  return Showcase(
+                    key: _menuKey,
+                    title: 'Menu Principale',
+                    description: _menuTutorialDescription,
+                    targetShapeBorder: const CircleBorder(),
+                    child: IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+                  );
+                },
+              ),
+
+              // TRANQUIL MODE (Showcase #2)
               actions: [
-                IconButton(
-                  icon: Icon(
-                    provider.isTranquilMode ? Icons.spa : Icons.spa_outlined,
-                    color: provider.isTranquilMode
-                        ? AppColors.primary
-                        : Colors.grey,
+                Showcase(
+                  key: _tranquilKey,
+                  title: 'Modalità Relax',
+                  description:
+                      'Tocca la foglia per nascondere le calorie\ne ridurre lo stress.',
+                  targetShapeBorder: const CircleBorder(),
+                  child: IconButton(
+                    icon: Icon(
+                      provider.isTranquilMode ? Icons.spa : Icons.spa_outlined,
+                      color: provider.isTranquilMode
+                          ? AppColors.primary
+                          : Colors.grey,
+                    ),
+                    onPressed: provider.toggleTranquilMode,
                   ),
-                  onPressed: provider.toggleTranquilMode,
                 ),
               ],
+
               bottom: TabBar(
                 controller: _tabController,
                 isScrollable: true,
@@ -154,12 +235,12 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             )
           : null,
 
-      drawer: _buildDrawer(context, _auth.currentUser),
+      drawer: _buildDrawer(context, user),
       body: _buildBody(provider),
 
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
-          indicatorColor: AppColors.primary.withOpacity(0.1), // Fix withOpacity
+          indicatorColor: AppColors.primary.withOpacity(0.1),
           iconTheme: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
               return const IconThemeData(color: AppColors.primary);
@@ -182,14 +263,32 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         child: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: (i) => setState(() => _currentIndex = i),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.kitchen), label: 'Dispensa'),
+          destinations: [
+            // DISPENSA (Showcase #3)
             NavigationDestination(
+              icon: Showcase(
+                key: _pantryTabKey,
+                title: 'Dispensa',
+                description:
+                    'Tieni traccia di ciò che hai in casa.\nScorri per eliminare, + per aggiungere.',
+                child: const Icon(Icons.kitchen),
+              ),
+              label: 'Dispensa',
+            ),
+
+            const NavigationDestination(
               icon: Icon(Icons.calendar_today),
               label: 'Piano',
             ),
+
+            // LISTA SPESA (Showcase #4)
             NavigationDestination(
-              icon: Icon(Icons.shopping_cart),
+              icon: Showcase(
+                key: _shoppingTabKey,
+                title: 'Lista della Spesa',
+                description: 'Generata in automatico dalla tua dieta.',
+                child: const Icon(Icons.shopping_cart),
+              ),
               label: 'Lista',
             ),
           ],
@@ -236,7 +335,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     }
   }
 
-  // --- DRAWER & FUNZIONI ---
   Widget _buildDrawer(BuildContext drawerCtx, User? user) {
     final String initial = (user?.email != null && user!.email!.isNotEmpty)
         ? user.email![0].toUpperCase()
@@ -255,7 +353,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           role =
               (snapshot.data!.data() as Map<String, dynamic>)['role'] ?? 'user';
         }
-        final bool canUpload = role != 'client';
+        final bool canUpload = (role == 'independent' || role == 'admin');
 
         return Drawer(
           backgroundColor: Colors.white,
@@ -333,6 +431,21 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   },
                 ),
                 const Divider(),
+
+                // TASTO RESET TUTORIAL (Solo per Test, rimuovere in produzione se vuoi)
+                ListTile(
+                  leading: const Icon(
+                    Icons.replay_circle_filled,
+                    color: Colors.green,
+                  ),
+                  title: const Text("Riavvia Tutorial"),
+                  onTap: () {
+                    Navigator.pop(drawerCtx);
+                    _resetTutorial();
+                  },
+                ),
+
+                const Divider(),
                 ListTile(
                   leading: const Icon(Icons.logout, color: Colors.red),
                   title: const Text("Esci"),
@@ -387,10 +500,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   Future<void> _scanReceipt(DietProvider provider) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'png', 'jpeg', 'pdf'],
-      );
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
       if (result != null && result.files.single.path != null) {
         int count = await provider.scanReceipt(result.files.single.path!);
         if (mounted) {
@@ -416,18 +526,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   Future<void> _openTimeSettings() async {
     final storage = StorageService();
-    // NOTA: Qui uso loadAlarms() come da tua struttura
     List<Map<String, dynamic>> alarms = [];
     try {
-      // Se loadAlarms non esiste o fallisce, gestiamo l'errore
-      // alarms = await storage.loadAlarms(); // Scommenta se il metodo esiste
-      // Se il metodo si chiama getAlarms e ritorna Map, serve adattamento.
-      // Assumo che loadAlarms ritorni List<Map> come nel fix precedente.
       var data = await storage.loadAlarms();
-      alarms = List<Map<String, dynamic>>.from(data);
-    } catch (_) {
-      // Fallback se vuoto o errore
-    }
+      if (data is List) {
+        alarms = List<Map<String, dynamic>>.from(data);
+      }
+    } catch (_) {}
 
     if (!mounted) return;
 
@@ -447,37 +552,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               });
             }
 
-            void removeAlarm(int index) {
-              setDialogState(() => alarms.removeAt(index));
-            }
-
-            void restoreDefaults() {
-              setDialogState(() {
-                alarms = [
-                  {
-                    'id': 10,
-                    'label': 'Colazione ☕',
-                    'time': '08:00',
-                    'body': 'È ora di fare il pieno di energia!',
-                  },
-                  {
-                    'id': 11,
-                    'label': 'Pranzo 🥗',
-                    'time': '13:00',
-                    'body': 'Buon appetito! Segui il piano.',
-                  },
-                  {
-                    'id': 12,
-                    'label': 'Cena 🍽️',
-                    'time': '20:00',
-                    'body': 'Chiudi la giornata con gusto.',
-                  },
-                ];
-              });
-            }
+            void removeAlarm(int index) =>
+                setDialogState(() => alarms.removeAt(index));
 
             return AlertDialog(
-              insetPadding: const EdgeInsets.all(10),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -486,7 +564,30 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.restore),
-                        onPressed: restoreDefaults,
+                        onPressed: () {
+                          setDialogState(() {
+                            alarms = [
+                              {
+                                'id': 10,
+                                'label': 'Colazione ☕',
+                                'time': '08:00',
+                                'body': 'È ora di fare il pieno di energia!',
+                              },
+                              {
+                                'id': 11,
+                                'label': 'Pranzo 🥗',
+                                'time': '13:00',
+                                'body': 'Buon appetito! Segui il piano.',
+                              },
+                              {
+                                'id': 12,
+                                'label': 'Cena 🍽️',
+                                'time': '20:00',
+                                'body': 'Chiudi la giornata con gusto.',
+                              },
+                            ];
+                          });
+                        },
                       ),
                       IconButton(
                         icon: const Icon(Icons.add_circle, color: Colors.blue),
@@ -499,7 +600,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               content: SizedBox(
                 width: double.maxFinite,
                 child: alarms.isEmpty
-                    ? const Center(child: Text("Nessun allarme impostato."))
+                    ? const Center(child: Text("Nessun allarme."))
                     : ListView.builder(
                         shrinkWrap: true,
                         itemCount: alarms.length,
@@ -520,34 +621,33 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                   Row(
                                     children: [
                                       Expanded(
-                                        flex: 2,
                                         child: TextFormField(
                                           initialValue: alarm['label'],
                                           decoration: const InputDecoration(
                                             labelText: "Titolo",
                                             isDense: true,
                                           ),
-                                          onChanged: (val) =>
-                                              alarm['label'] = val,
+                                          onChanged: (v) => alarm['label'] = v,
                                         ),
                                       ),
-                                      TextButton.icon(
-                                        icon: const Icon(Icons.access_time),
-                                        label: Text(
-                                          "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
-                                        ),
+                                      TextButton(
                                         onPressed: () async {
-                                          final picked = await showTimePicker(
+                                          final p = await showTimePicker(
                                             context: innerCtx,
                                             initialTime: time,
                                           );
-                                          if (picked != null) {
-                                            setDialogState(() {
-                                              alarm['time'] =
-                                                  "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
-                                            });
-                                          }
+                                          if (p != null)
+                                            setDialogState(
+                                              () => alarm['time'] =
+                                                  "${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}",
+                                            );
                                         },
+                                        child: Text(
+                                          "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
                                       IconButton(
                                         icon: const Icon(
@@ -564,7 +664,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                                       labelText: "Messaggio",
                                       isDense: true,
                                     ),
-                                    onChanged: (val) => alarm['body'] = val,
+                                    onChanged: (v) => alarm['body'] = v,
                                   ),
                                 ],
                               ),
@@ -587,13 +687,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     await storage.saveAlarms(alarms);
                     final notifs = NotificationService();
                     await notifs.init();
-                    await notifs.requestPermissions();
                     await notifs.scheduleAllMeals();
-                    if (mounted) {
+                    if (mounted)
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Allarmi aggiornati!")),
                       );
-                    }
                   },
                   child: const Text("Salva"),
                 ),

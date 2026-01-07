@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../core/error_handler.dart'; // [IMPORTANTE]
+import '../core/error_handler.dart';
+import '../widgets/diet_logo.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -28,7 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        // [UX] Errore tradotto
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ErrorMapper.toUserMessage(e)),
@@ -67,7 +67,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        // [UX] Errore tradotto
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ErrorMapper.toUserMessage(e)),
@@ -84,6 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Center(
@@ -91,11 +91,15 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.eco, size: 80, color: Colors.green),
-                const SizedBox(height: 20),
+                // LOGO APP (Immagine)
+                const DietLogo(size: 120),
+                const SizedBox(height: 30),
                 Text(
                   _isLogin ? "Bentornato!" : "Crea Account",
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
                 const SizedBox(height: 32),
                 TextField(
