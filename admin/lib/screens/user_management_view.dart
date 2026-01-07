@@ -956,7 +956,7 @@ class _UserManagementViewState extends State<UserManagementView> {
   }
 }
 
-class _UserCard extends StatelessWidget {
+class _UserCard extends StatefulWidget {
   final DocumentSnapshot doc;
   final Function(String) onDelete;
   final Function(String) onUploadDiet;
@@ -981,7 +981,17 @@ class _UserCard extends StatelessWidget {
     required this.roleColor,
   });
 
-  // --- PRIVACY HELPERS ---
+  @override
+  State<_UserCard> createState() => _UserCardState();
+}
+
+class _UserCardState extends State<_UserCard> {
+  // Stato locale: true = vedo i dati in chiaro per questa sessione
+  bool _isUnlocked = false;
+  bool _isUnlocking = false; // Per lo spinner durante la chiamata al server
+
+  final AdminRepository _repo = AdminRepository();
+
   String _maskEmail(String email) {
     if (email.length <= 4) return "****";
     final parts = email.split('@');
@@ -995,27 +1005,61 @@ class _UserCard extends StatelessWidget {
     return parts.map((p) => p.isNotEmpty ? "${p[0]}***" : "*").join(' ');
   }
 
+  Future<void> _unlockData() async {
+    setState(() => _isUnlocking = true);
+    try {
+      // 1. Chiamata al server per loggare l'azione (OBBLIGATORIO)
+      // Se questa fallisce, l'utente NON vedrà i dati.
+      await _repo.logDataAccess(widget.doc.id);
+
+      // 2. Se successo, sblocca localmente
+      if (mounted) {
+        setState(() {
+          _isUnlocked = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Dati sbloccati. Accesso registrato nel log di sicurezza.",
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Impossibile sbloccare: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUnlocking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = widget.doc.data() as Map<String, dynamic>;
     final role = data['role'] ?? 'user';
 
-    // Dati Originali
     final realFirstName = data['first_name'] ?? '';
     final realLastName = data['last_name'] ?? '';
     final realName = "$realFirstName $realLastName";
     final realEmail = data['email'] ?? '';
 
-    // --- LOGICA PRIVACY AGGIORNATA ---
-    final bool isAdmin = currentUserRole == 'admin';
-
-    // Un "Professionista" è un Nutrizionista o un altro Admin.
-    // I loro dati sono di business, quindi l'Admin DEVE poterli vedere.
+    // LOGICA PRIVACY:
+    // Se sono Admin, di base vedo mascherato.
+    // Se clicco il tasto e il server conferma il log, _isUnlocked diventa true e vedo tutto.
+    final bool isAdmin = widget.currentUserRole == 'admin';
     final bool isTargetProfessional =
         (role == 'nutritionist' || role == 'admin');
 
-    // Mascheriamo SOLO se sono Admin E sto guardando un utente "semplice" (Paziente)
-    final bool shouldMask = isAdmin && !isTargetProfessional;
+    // Maschera se: Sono Admin AND non è un collega AND non ho sbloccato manualmente
+    final bool shouldMask = isAdmin && !isTargetProfessional && !_isUnlocked;
 
     final String displayName = shouldMask ? _maskName(realName) : realName;
     final String displayEmail = shouldMask ? _maskEmail(realEmail) : realEmail;
@@ -1028,24 +1072,15 @@ class _UserCard extends StatelessWidget {
     final createdBy = data['created_by'];
     final requiresPassChange = data['requires_password_change'] == true;
 
-    // --- LOGICA PERMESSI AZIONI ---
-    // 1. Configurazione Parser: SOLO Admin (Gestione tecnica)
+    // Permessi (Invariati)
     bool showParser = isAdmin;
-
-    // 2. Caricamento Dieta / Storico: SOLO Nutrizionista (Privacy Sanitaria)
-    // L'Admin non deve vedere le diete dei pazienti.
     bool showDiet = !isAdmin && (role == 'user' || role == 'independent');
-
-    // 3. Eliminazione: Admin (gestione piattaforma) o Nutrizionista (sui suoi pazienti)
-    bool canDelete = isAdmin || (role == 'user' && createdBy == currentUserId);
-
-    // 4. Modifica: Admin (limitata) o Nutrizionista (sui suoi pazienti)
+    bool canDelete =
+        isAdmin || (role == 'user' && createdBy == widget.currentUserId);
     bool canEdit =
-        requiresPassChange && (isAdmin || createdBy == currentUserId);
-
-    // 5. Assegnazione: Solo per utenti non assegnati
+        requiresPassChange && (isAdmin || createdBy == widget.currentUserId);
     bool canAssign =
-        (role == 'independent' || role == 'user') && onAssign != null;
+        (role == 'independent' || role == 'user') && widget.onAssign != null;
 
     return Card(
       child: Padding(
@@ -1057,13 +1092,13 @@ class _UserCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: roleColor.withValues(alpha: 0.2),
+                  backgroundColor: widget.roleColor.withValues(alpha: 0.2),
                   child: Text(
                     displayName.isNotEmpty && !displayName.startsWith('*')
                         ? displayName[0].toUpperCase()
                         : "?",
                     style: TextStyle(
-                      color: roleColor,
+                      color: widget.roleColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1086,10 +1121,9 @@ class _UserCard extends StatelessWidget {
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      // Mostriamo l'UID all'Admin per debug tecnico (utile se il nome è mascherato)
                       if (isAdmin)
                         Text(
-                          "UID: ${doc.id}",
+                          "UID: ${widget.doc.id}",
                           style: const TextStyle(
                             color: Colors.grey,
                             fontSize: 10,
@@ -1100,13 +1134,32 @@ class _UserCard extends StatelessWidget {
                     ],
                   ),
                 ),
+
+                // --- TASTO SBLOCCO (Solo se mascherato) ---
+                if (shouldMask)
+                  _isUnlocking
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton(
+                          icon: const Icon(
+                            Icons.lock_outline,
+                            color: Colors.orange,
+                          ),
+                          tooltip: "Sblocca Dati (Registra Log)",
+                          onPressed:
+                              _unlockData, // Chiama la funzione con log server-side
+                        ),
+
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: roleColor.withValues(alpha: 0.1),
+                    color: widget.roleColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -1114,7 +1167,7 @@ class _UserCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: roleColor,
+                      color: widget.roleColor,
                     ),
                   ),
                 ),
@@ -1139,7 +1192,6 @@ class _UserCard extends StatelessWidget {
                 ),
               ),
             const Divider(),
-            // --- AZIONI ---
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -1149,45 +1201,35 @@ class _UserCard extends StatelessWidget {
                       role == 'user' ? Icons.manage_accounts : Icons.person_add,
                       color: Colors.blue,
                     ),
-                    tooltip: role == 'user'
-                        ? "Gestisci Assegnazione"
-                        : "Assegna a Nutrizionista",
-                    onPressed: () => onAssign!(data['uid']),
+                    tooltip: "Gestisci Assegnazione",
+                    onPressed: () => widget.onAssign!(data['uid']),
                   ),
-
-                // DIETE: Visibili SOLO se NON sei Admin (Privacy Sanitaria)
                 if (showDiet) ...[
                   IconButton(
                     icon: const Icon(Icons.history, color: Colors.teal),
                     tooltip: "Storico Diete",
-                    onPressed: () => onHistory(data['uid']),
+                    onPressed: () => widget.onHistory(data['uid']),
                   ),
                   IconButton(
                     icon: const Icon(Icons.upload_file, color: Colors.blueGrey),
                     tooltip: "Carica Dieta",
-                    onPressed: () => onUploadDiet(data['uid']),
+                    onPressed: () => widget.onUploadDiet(data['uid']),
                   ),
                 ],
-
-                // PARSER: Visibile SOLO se sei Admin (Tool Tecnico)
                 if (showParser)
                   IconButton(
                     icon: const Icon(
                       Icons.settings_applications,
                       color: Colors.orange,
                     ),
-                    tooltip: "Configura Parser (Tecnico)",
-                    onPressed: () => onUploadParser(data['uid']),
+                    tooltip: "Configura Parser",
+                    onPressed: () => widget.onUploadParser(data['uid']),
                   ),
-
                 if (canEdit)
                   IconButton(
                     icon: const Icon(Icons.edit, color: Colors.indigo),
                     tooltip: "Modifica",
-                    // Qui passiamo i dati REALI al form di modifica.
-                    // L'Admin può modificare l'email anche se è mascherata nella lista?
-                    // Sì, perché nel form di modifica deve poter correggere errori.
-                    onPressed: () => onEdit(
+                    onPressed: () => widget.onEdit(
                       data['uid'],
                       realEmail,
                       realFirstName,
@@ -1198,7 +1240,7 @@ class _UserCard extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
                     tooltip: "Elimina",
-                    onPressed: () => onDelete(data['uid']),
+                    onPressed: () => widget.onDelete(data['uid']),
                   ),
               ],
             ),

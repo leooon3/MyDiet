@@ -237,4 +237,24 @@ class AdminRepository {
       throw Exception(await response.stream.bytesToString());
     }
   }
+  // --- AUDIT & SECURITY ---
+
+  Future<void> logDataAccess(String targetUid) async {
+    final token = await _getToken();
+    final response = await http.post(
+      Uri.parse('$_baseUrl/admin/log-access'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'target_uid': targetUid,
+        'reason': 'Admin requested explicit PII unlock via Dashboard',
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Audit Log Failed: Access Denied for security reasons.');
+    }
+  }
 }

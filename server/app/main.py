@@ -105,7 +105,10 @@ class ScheduleMaintenanceRequest(BaseModel):
     scheduled_time: str
     message: str
     notify: bool
-
+class LogAccessRequest(BaseModel):
+    target_uid: str
+    reason: str
+    
 # --- UTILS & SECURITY ---
 
 async def save_upload_file(file: UploadFile, filename: str) -> None:
@@ -431,6 +434,29 @@ async def upload_parser_config(target_uid: str, file: UploadFile = File(...), re
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/admin/log-access")
+async def log_sensitive_access(body: LogAccessRequest, requester_id: str = Depends(verify_admin)):
+    """
+    Registra un accesso ai dati sensibili (PII) per audit.
+    """
+    try:
+        db = firebase_admin.firestore.client()
+        
+        # Salviamo il log. Non permettiamo la modifica o cancellazione da API standard.
+        db.collection('access_logs').add({
+            'requester_id': requester_id,
+            'target_uid': body.target_uid,
+            'action': 'UNLOCK_PII_VIEW', # PII = Personally Identifiable Information
+            'reason': body.reason,
+            'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP,
+            'user_agent': 'kybo_admin_panel'
+        })
+        
+        return {"status": "logged", "message": "Access recorded securely"}
+    except Exception as e:
+        # Se il log fallisce, l'accesso DEVE essere negato (fail-safe)
+        raise HTTPException(status_code=500, detail=f"Audit log failed: {str(e)}")
+    
 # --- MAINTENANCE & HELPERS ---
 
 @app.get("/admin/config/maintenance")
