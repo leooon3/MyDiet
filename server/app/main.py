@@ -144,28 +144,39 @@ async def verify_token(authorization: str = Header(...)):
     except Exception:
         raise HTTPException(status_code=401, detail="Authentication failed")
 
+# 1. LIVELLO ADMIN (SOLO PER GESTIONE UTENTI PURA)
 async def verify_admin(token: dict = Depends(verify_token)):
     role = token.get('role')
     uid = token.get('uid')
     
     if role == 'admin':
-        return uid
+        return {'uid': uid, 'role': 'admin'}
     
+    # Fallback db check
     try:
         db = firebase_admin.firestore.client()
         user_doc = db.collection('users').document(uid).get()
         if user_doc.exists and user_doc.to_dict().get('role') == 'admin':
              auth.set_custom_user_claims(uid, {'role': 'admin'})
-             return uid
+             return {'uid': uid, 'role': 'admin'}
     except:
         pass
-        
     raise HTTPException(status_code=403, detail="Admin privileges required")
+
+# 2. LIVELLO PROFESSIONISTA (ADMIN + NUTRIZIONISTA) - PER VEDERE I DATI
+async def verify_professional(token: dict = Depends(verify_token)):
+    role = token.get('role')
+    uid = token.get('uid')
+    
+    if role in ['admin', 'nutritionist']:
+        return {'uid': uid, 'role': role}
+        
+    raise HTTPException(status_code=403, detail="Professional privileges required")
 
 async def get_current_uid(token: dict = Depends(verify_token)):
     return token['uid']
 
-# --- BACKGROUND WORKER (SECURE SCHEDULER) ---
+# --- BACKGROUND WORKER ---
 
 async def maintenance_worker():
     logger.info("maintenance_worker_started")
@@ -224,12 +235,27 @@ async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token:
 
 @app.post("/upload-diet/{target_uid}", response_model=DietResponse)
 @limiter.limit("10/minute")
-async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), requester_id: str = Depends(get_current_uid)):
+async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), requester: dict = Depends(verify_professional)):
+    # FIX: Permetti anche al nutrizionista di caricare
+    requester_id = requester['uid']
+    requester_role = requester['role']
+
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
+    
+    db = firebase_admin.firestore.client()
+
+    # CHECK PERMESSI NUTRIZIONISTA
+    if requester_role == 'nutritionist':
+        target_doc = db.collection('users').document(target_uid).get()
+        if not target_doc.exists:
+             raise HTTPException(status_code=404, detail="User not found")
+        data = target_doc.to_dict()
+        if data.get('parent_id') != requester_id and data.get('created_by') != requester_id:
+             raise HTTPException(status_code=403, detail="Non puoi caricare diete per questo utente")
+
     temp_filename = f"{uuid.uuid4()}.pdf"
     try:
         await save_upload_file(file, temp_filename)
-        db = firebase_admin.firestore.client()
         custom_prompt = None
         user_doc = db.collection('users').document(target_uid).get()
         if user_doc.exists:
@@ -242,7 +268,6 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
         formatted_data = _convert_to_app_format(raw_data)
         dict_data = formatted_data.dict()
 
-        # 1. Save to Admin History (Global)
         db.collection('diet_history').add({
             'userId': target_uid,
             'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
@@ -251,7 +276,6 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
             'uploadedBy': requester_id
         })
 
-        # 2. Save to Client History (User Subcollection)
         db.collection('users').document(target_uid).collection('diets').add({
             'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
             'plan': dict_data.get('plan'),
@@ -275,20 +299,18 @@ async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_f
     finally:
         if os.path.exists(temp_filename): os.remove(temp_filename)
 
-# --- ADMIN USER MANAGEMENT ---
+# --- ADMIN MANAGEMENT (SOLO ADMIN) ---
 
 @app.post("/admin/create-user")
-async def admin_create_user(body: CreateUserRequest, requester_id: str = Depends(verify_admin)):
+async def admin_create_user(body: CreateUserRequest, requester: dict = Depends(verify_admin)):
+    requester_id = requester['uid']
     try:
         db = firebase_admin.firestore.client()
         existing_docs = db.collection('users').where('email', '==', body.email).stream()
         for doc in existing_docs:
             doc.reference.delete()
 
-        requester_doc = db.collection('users').document(requester_id).get()
         final_parent_id = body.parent_id
-        if requester_doc.exists and requester_doc.to_dict().get('role') == 'nutritionist':
-            final_parent_id = requester_id
         
         user = auth.create_user(
             email=body.email, 
@@ -315,7 +337,7 @@ async def admin_create_user(body: CreateUserRequest, requester_id: str = Depends
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.put("/admin/update-user/{target_uid}")
-async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_id: str = Depends(verify_admin)):
+async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
         update_args = {}
@@ -343,7 +365,7 @@ async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/assign-user")
-async def admin_assign_user(body: AssignUserRequest, requester_id: str = Depends(verify_admin)):
+async def admin_assign_user(body: AssignUserRequest, requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
         db.collection('users').document(body.target_uid).update({
@@ -357,7 +379,7 @@ async def admin_assign_user(body: AssignUserRequest, requester_id: str = Depends
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/unassign-user")
-async def admin_unassign_user(body: UnassignUserRequest, requester_id: str = Depends(verify_admin)):
+async def admin_unassign_user(body: UnassignUserRequest, requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
         db.collection('users').document(body.target_uid).update({
@@ -371,7 +393,7 @@ async def admin_unassign_user(body: UnassignUserRequest, requester_id: str = Dep
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/admin/delete-user/{target_uid}")
-async def admin_delete_user(target_uid: str, requester_id: str = Depends(verify_admin)):
+async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_admin)):
     try:
         try: auth.delete_user(target_uid)
         except: pass
@@ -381,7 +403,7 @@ async def admin_delete_user(target_uid: str, requester_id: str = Depends(verify_
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/sync-users")
-async def admin_sync_users(requester_id: str = Depends(verify_admin)):
+async def admin_sync_users(requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
         count = 0
@@ -414,7 +436,8 @@ async def admin_sync_users(requester_id: str = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/admin/upload-parser/{target_uid}")
-async def upload_parser_config(target_uid: str, file: UploadFile = File(...), requester_id: str = Depends(verify_admin)):
+async def upload_parser_config(target_uid: str, file: UploadFile = File(...), requester: dict = Depends(verify_admin)):
+    requester_id = requester['uid']
     try:
         content = (await file.read()).decode("utf-8")
         db = firebase_admin.firestore.client()
@@ -435,13 +458,11 @@ async def upload_parser_config(target_uid: str, file: UploadFile = File(...), re
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- AUDIT & SECURE GATEWAY ---
+# --- SECURE GATEWAY & AUDIT (PROFESSIONAL LEVEL) ---
 
 @app.post("/admin/log-access")
-async def log_access(body: LogAccessRequest, requester_id: str = Depends(verify_admin)):
-    """
-    Registra esplicitamente l'accesso ai dati di un utente (sblocco maschera).
-    """
+async def log_access(body: LogAccessRequest, requester: dict = Depends(verify_professional)):
+    requester_id = requester['uid']
     try:
         db = firebase_admin.firestore.client()
         db.collection('access_logs').add({
@@ -458,20 +479,32 @@ async def log_access(body: LogAccessRequest, requester_id: str = Depends(verify_
         raise HTTPException(status_code=500, detail="Failed to log access")
 
 @app.get("/admin/user-history/{target_uid}")
-async def get_secure_user_history(target_uid: str, requester_id: str = Depends(verify_admin)):
+async def get_secure_user_history(target_uid: str, requester: dict = Depends(verify_professional)):
     """
-    Recupera lo storico diete (SOLO METADATI PER ADMIN).
-    Logga l'accesso e RIMUOVE il contenuto sensibile della dieta.
+    Accessibile sia ad Admin che Nutrizionista assegnato.
     """
+    requester_id = requester['uid']
+    requester_role = requester['role']
+    
     try:
         db = firebase_admin.firestore.client()
         
+        # Check assegnazione per nutrizionisti
+        if requester_role == 'nutritionist':
+            user_doc = db.collection('users').document(target_uid).get()
+            if not user_doc.exists:
+                raise HTTPException(status_code=404, detail="User not found")
+            data = user_doc.to_dict()
+            # Deve essere il "parent_id" (assegnato) o il "created_by" (creatore)
+            if data.get('parent_id') != requester_id and data.get('created_by') != requester_id:
+                raise HTTPException(status_code=403, detail="Access denied to this user's history")
+
         # 1. AUDIT LOG
         db.collection('access_logs').add({
             'requester_id': requester_id,
             'target_uid': target_uid,
             'action': 'READ_HISTORY_METADATA',
-            'reason': 'Admin Audit Check',
+            'reason': 'Audit Check',
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP,
             'user_agent': 'kybo_secure_gateway'
         })
@@ -487,10 +520,8 @@ async def get_secure_user_history(target_uid: str, requester_id: str = Depends(v
         results = []
         for doc in history_docs:
             data = doc.to_dict()
-            
-            # --- FILTRO PRIVACY ASSOLUTA ---
             if 'parsedData' in data:
-                del data['parsedData']  # CANCELLA il contenuto
+                del data['parsedData']  # Privacy Filter
             
             if 'uploadedAt' in data and data['uploadedAt']:
                 data['uploadedAt'] = data['uploadedAt'].isoformat()
@@ -499,14 +530,26 @@ async def get_secure_user_history(target_uid: str, requester_id: str = Depends(v
             
         return results
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error("secure_gateway_error", error=str(e))
-        raise HTTPException(status_code=500, detail="Errore recupero storico")
+        raise HTTPException(status_code=500, detail="Error fetching history")
 
 @app.get("/admin/users-secure")
-async def list_users_secure(requester_id: str = Depends(verify_admin)):
+async def list_users_secure(requester: dict = Depends(verify_professional)):
+    """
+    Secure Directory: 
+    - Admin: Vede tutto.
+    - Nutrizionista: Vede SOLO i propri assegnati.
+    """
+    requester_id = requester['uid']
+    requester_role = requester['role']
+    
     try:
         db = firebase_admin.firestore.client()
+        
+        # AUDIT
         db.collection('access_logs').add({
             'requester_id': requester_id,
             'action': 'READ_USER_DIRECTORY',
@@ -516,7 +559,15 @@ async def list_users_secure(requester_id: str = Depends(verify_admin)):
         })
         
         users_ref = db.collection('users')
-        docs = users_ref.stream()
+        
+        if requester_role == 'nutritionist':
+            # Filtra server-side per il nutrizionista
+            docs = users_ref.where('parent_id', '==', requester_id).stream()
+            # Opzionale: se supporti anche 'created_by' potresti dover fare una seconda query e unire i risultati
+            # ma 'parent_id' è il campo master per l'assegnazione.
+        else:
+            # Admin vede tutto
+            docs = users_ref.stream()
         
         results = []
         for doc in docs:
@@ -526,47 +577,60 @@ async def list_users_secure(requester_id: str = Depends(verify_admin)):
         return results
     except Exception as e:
         logger.error("secure_user_list_error", error=str(e))
-        raise HTTPException(status_code=500, detail="Errore recupero utenti")
+        raise HTTPException(status_code=500, detail="Error fetching users")
 
 @app.get("/admin/user-details-secure/{target_uid}")
-async def get_user_details_secure(target_uid: str, requester_id: str = Depends(verify_admin)):
+async def get_user_details_secure(target_uid: str, requester: dict = Depends(verify_professional)):
+    requester_id = requester['uid']
+    requester_role = requester['role']
+
     try:
         db = firebase_admin.firestore.client()
+        
+        if requester_role == 'nutritionist':
+             user_doc = db.collection('users').document(target_uid).get()
+             if not user_doc.exists:
+                 raise HTTPException(status_code=404, detail="User not found")
+             if user_doc.to_dict().get('parent_id') != requester_id:
+                 raise HTTPException(status_code=403, detail="Access denied")
+
         db.collection('access_logs').add({
             'requester_id': requester_id,
             'target_uid': target_uid,
             'action': 'READ_USER_PROFILE',
-            'reason': 'Admin Detail View',
+            'reason': 'Detail View',
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP,
             'user_agent': 'kybo_admin_panel'
         })
         
         doc = db.collection('users').document(target_uid).get()
         if not doc.exists:
-            raise HTTPException(status_code=404, detail="Utente non trovato")
+            raise HTTPException(status_code=404, detail="User not found")
             
         return doc.to_dict()
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error("secure_user_detail_error", error=str(e))
-        raise HTTPException(status_code=500, detail="Errore recupero profilo")
+        raise HTTPException(status_code=500, detail="Error fetching profile")
 
-# --- MAINTENANCE & HELPERS ---
+# --- MAINTENANCE ---
 
 @app.get("/admin/config/maintenance")
-async def get_maintenance_status(requester_id: str = Depends(verify_admin)):
+async def get_maintenance_status(requester: dict = Depends(verify_admin)):
     doc = firebase_admin.firestore.client().collection('config').document('global').get()
     return {"enabled": doc.to_dict().get('maintenance_mode', False)} if doc.exists else {"enabled": False}
 
 @app.post("/admin/config/maintenance")
-async def set_maintenance_status(body: MaintenanceRequest, requester_id: str = Depends(verify_admin)):
-    data = {'maintenance_mode': body.enabled, 'updated_by': requester_id}
+async def set_maintenance_status(body: MaintenanceRequest, requester: dict = Depends(verify_admin)):
+    data = {'maintenance_mode': body.enabled, 'updated_by': requester['uid']}
     if body.message:
         data['maintenance_message'] = body.message
     firebase_admin.firestore.client().collection('config').document('global').set(data, merge=True)
     return {"message": "Updated"}
 
 @app.post("/admin/schedule-maintenance")
-async def schedule_maintenance(req: ScheduleMaintenanceRequest, admin_uid: str = Depends(verify_admin)):
+async def schedule_maintenance(req: ScheduleMaintenanceRequest, requester: dict = Depends(verify_admin)):
     firebase_admin.firestore.client().collection('config').document('global').set({
         "scheduled_maintenance_start": req.scheduled_time,
         "maintenance_message": req.message,
@@ -580,7 +644,7 @@ async def schedule_maintenance(req: ScheduleMaintenanceRequest, admin_uid: str =
     return {"status": "scheduled"}
 
 @app.post("/admin/cancel-maintenance")
-async def cancel_maintenance_schedule(requester_id: str = Depends(verify_admin)):
+async def cancel_maintenance_schedule(requester: dict = Depends(verify_admin)):
     firebase_admin.firestore.client().collection('config').document('global').update({
         "is_scheduled": False,
         "scheduled_maintenance_start": firestore.DELETE_FIELD,
