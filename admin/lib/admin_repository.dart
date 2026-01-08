@@ -237,6 +237,7 @@ class AdminRepository {
       throw Exception(await response.stream.bytesToString());
     }
   }
+
   // --- AUDIT & SECURITY ---
 
   Future<void> logDataAccess(String targetUid) async {
@@ -249,12 +250,63 @@ class AdminRepository {
       },
       body: jsonEncode({
         'target_uid': targetUid,
-        'reason': 'Admin requested explicit PII unlock via Dashboard',
+        'reason': 'Manual Unlock from Admin Panel',
       }),
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Audit Log Failed: Access Denied for security reasons.');
+      throw Exception('Audit Log Failed: ${response.body}');
+    }
+  }
+
+  Future<List<dynamic>> getSecureUserHistory(String targetUid) async {
+    final token = await _getToken();
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/admin/user-history/$targetUid'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+    } else {
+      throw Exception(
+        "Errore Audit Gateway (${response.statusCode}): ${response.body}",
+      );
+    }
+  }
+
+  // --- USER MANAGEMENT SECURE ---
+
+  Future<List<dynamic>> getSecureUsersList() async {
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$_baseUrl/admin/users-secure'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+    } else {
+      throw Exception("Errore Directory Secure (${response.statusCode})");
+    }
+  }
+
+  Future<Map<String, dynamic>> getSecureUserDetails(String uid) async {
+    final token = await _getToken();
+    final response = await http.get(
+      Uri.parse('$_baseUrl/admin/user-details-secure/$uid'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes))
+          as Map<String, dynamic>;
+    } else {
+      throw Exception("Errore Profilo Secure (${response.statusCode})");
     }
   }
 }

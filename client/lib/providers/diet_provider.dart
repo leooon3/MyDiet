@@ -92,8 +92,17 @@ Map<String, bool> _calculateAvailabilityIsolate(Map<String, dynamic> payload) {
         }
 
         final firstDish = dishes[indices[0]];
+        final String? instanceId = firstDish['instance_id']?.toString();
         final int cadCode = firstDish['cad_code'] ?? 0;
-        String swapKey = "${day}_${mType}_$cadCode";
+
+        String swapKey;
+        if (instanceId != null && instanceId.isNotEmpty) {
+          // Chiave univoca robusta (Nuovo Backend)
+          swapKey = "${day}_${mType}_$instanceId";
+        } else {
+          // Fallback legacy (Vecchio Backend / Cache vecchia)
+          swapKey = "${day}_${mType}_$cadCode";
+        }
 
         bool isSwapped = activeSwapsRaw.containsKey(swapKey);
 
@@ -364,8 +373,15 @@ class DietProvider extends ChangeNotifier {
     if (!force) {
       for (int i in targetGroupIndices) {
         final dish = meals[i];
+        final String? instanceId = dish['instance_id']?.toString();
         final int cadCode = dish['cad_code'] ?? 0;
-        final String swapKey = "${day}_${mealType}_$cadCode";
+
+        String swapKey;
+        if (instanceId != null && instanceId.isNotEmpty) {
+          swapKey = "${day}_${mealType}_$instanceId";
+        } else {
+          swapKey = "${day}_${mealType}_$cadCode";
+        }
 
         // VERIFICA SWAP
         if (_activeSwaps.containsKey(swapKey)) {
@@ -410,8 +426,15 @@ class DietProvider extends ChangeNotifier {
     // FASE 2: Esecuzione (Rimuovi cibo dalla dispensa)
     for (int i in targetGroupIndices) {
       final dish = meals[i];
+      final String? instanceId = dish['instance_id']?.toString();
       final int cadCode = dish['cad_code'] ?? 0;
-      final String swapKey = "${day}_${mealType}_$cadCode";
+
+      String swapKey;
+      if (instanceId != null && instanceId.isNotEmpty) {
+        swapKey = "${day}_${mealType}_$instanceId";
+      } else {
+        swapKey = "${day}_${mealType}_$cadCode";
+      }
 
       if (_activeSwaps.containsKey(swapKey)) {
         // CONSUMA ALIMENTO SOSTITUITO

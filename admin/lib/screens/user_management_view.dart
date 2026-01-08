@@ -1207,7 +1207,7 @@ class _UserCardState extends State<_UserCard> {
                 if (showDiet) ...[
                   IconButton(
                     icon: const Icon(Icons.history, color: Colors.teal),
-                    tooltip: "Storico Diete",
+                    tooltip: "Storico Diete (Secure)",
                     onPressed: () => widget.onHistory(data['uid']),
                   ),
                   IconButton(
@@ -1256,13 +1256,28 @@ class _UserCardState extends State<_UserCard> {
   }
 }
 
-class _UserHistoryScreen extends StatelessWidget {
+// [MODIFICATO] Usa la chiamata sicura invece di Firestore diretto
+class _UserHistoryScreen extends StatefulWidget {
   final String targetUid;
   final String userName;
 
   const _UserHistoryScreen({required this.targetUid, required this.userName});
 
-  void _deleteDiet(BuildContext context, DocumentReference ref) async {
+  @override
+  State<_UserHistoryScreen> createState() => _UserHistoryScreenState();
+}
+
+class _UserHistoryScreenState extends State<_UserHistoryScreen> {
+  final AdminRepository _repo = AdminRepository();
+  late Future<List<dynamic>> _historyFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _historyFuture = _repo.getSecureUserHistory(widget.targetUid);
+  }
+
+  void _deleteDiet(BuildContext context, String dietId) async {
     bool confirm =
         await showDialog(
           context: context,
@@ -1286,11 +1301,21 @@ class _UserHistoryScreen extends StatelessWidget {
 
     if (confirm) {
       try {
-        await ref.delete();
+        // Poiché usiamo l'API, dobbiamo ricostruire il riferimento o usare una call API.
+        // Se le Rules lo permettono, l'admin può cancellare direttamente.
+        await FirebaseFirestore.instance
+            .collection('diet_history')
+            .doc(dietId)
+            .delete();
+
         if (context.mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text("Dieta eliminata")));
+          // Ricarica la lista
+          setState(() {
+            _historyFuture = _repo.getSecureUserHistory(widget.targetUid);
+          });
         }
       } catch (e) {
         if (context.mounted) {
@@ -1312,61 +1337,64 @@ class _UserHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Storico: $userName")),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('diet_history')
-            .where('userId', isEqualTo: targetUid)
-            .orderBy('uploadedAt', descending: true)
-            .snapshots(),
+      appBar: AppBar(title: Text("Storico (Secure): ${widget.userName}")),
+      body: FutureBuilder<List<dynamic>>(
+        future: _historyFuture,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
           if (snapshot.hasError) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  "Errore database: ${snapshot.error}",
+                  "Errore Audit Log: ${snapshot.error}",
                   textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
                 ),
               ),
             );
           }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
 
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) {
-            return const Center(child: Text("Nessuna dieta precedente."));
+          final list = snapshot.data ?? [];
+          if (list.isEmpty) {
+            return const Center(child: Text("Nessuna dieta presente."));
           }
 
           return ListView.separated(
-            itemCount: docs.length,
+            itemCount: list.length,
             separatorBuilder: (_, _) => const Divider(),
             itemBuilder: (ctx, i) {
-              final data = docs[i].data() as Map<String, dynamic>;
-              final date =
-                  (data['uploadedAt'] as Timestamp?)?.toDate() ??
-                  DateTime.now();
+              final data = list[i] as Map<String, dynamic>;
+              DateTime date;
+              try {
+                date = DateTime.parse(data['uploadedAt']);
+              } catch (_) {
+                date = DateTime.now();
+              }
+
               return ListTile(
                 leading: const Icon(
-                  Icons.picture_as_pdf,
-                  color: Colors.blueAccent,
+                  Icons.lock_clock, // Icona diversa per indicare Secure
+                  color: Colors.indigo,
                 ),
-                title: Text(data['fileName'] ?? "Dieta"),
-                subtitle: Text(DateFormat('dd MMM yyyy HH:mm').format(date)),
+                title: Text(data['fileName'] ?? "Dieta Protetta"),
+                subtitle: Text(
+                  "Caricato il: ${DateFormat('dd MMM yyyy HH:mm').format(date)}",
+                ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       icon: const Icon(Icons.visibility, color: Colors.green),
-                      tooltip: "Visualizza",
+                      tooltip: "Visualizza Dettagli",
                       onPressed: () => _viewDiet(context, data),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
                       tooltip: "Elimina",
-                      onPressed: () => _deleteDiet(context, docs[i].reference),
+                      onPressed: () => _deleteDiet(context, data['id']),
                     ),
                   ],
                 ),
@@ -1392,7 +1420,26 @@ class _DietDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(data['fileName'] ?? "Dettaglio")),
       body: plan == null
-          ? const Center(child: Text("Dati dieta non validi o mancanti."))
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.security, size: 64, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Contenuto Protetto",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      "Il contenuto del piano alimentare è stato rimosso per privacy durante l'audit dell'amministratore.",
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            )
           : ListView(
               padding: const EdgeInsets.all(16),
               children: plan.entries.map((entry) {

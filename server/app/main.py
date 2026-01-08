@@ -18,7 +18,6 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from pydantic import Json, BaseModel
-import uuid
 
 # --- IMPORTS ---
 from app.services.diet_service import DietParser
@@ -106,11 +105,11 @@ class ScheduleMaintenanceRequest(BaseModel):
     scheduled_time: str
     message: str
     notify: bool
+
 class LogAccessRequest(BaseModel):
     target_uid: str
     reason: str
     
-# --- UTILS & SECURITY ---
 # --- UTILS & SECURITY ---
 
 async def save_upload_file(file: UploadFile, filename: str) -> None:
@@ -145,7 +144,6 @@ async def verify_token(authorization: str = Header(...)):
     except Exception:
         raise HTTPException(status_code=401, detail="Authentication failed")
 
-# CORRETTO: Dipende da verify_token (dict), non da get_current_uid (str)
 async def verify_admin(token: dict = Depends(verify_token)):
     role = token.get('role')
     uid = token.get('uid')
@@ -283,19 +281,15 @@ async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_f
 async def admin_create_user(body: CreateUserRequest, requester_id: str = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
-        
-        # 1. CLEANUP: Delete any existing orphaned docs with this email to prevent duplicates
         existing_docs = db.collection('users').where('email', '==', body.email).stream()
         for doc in existing_docs:
             doc.reference.delete()
 
-        # 2. Check requester permissions (for inheritance logic)
         requester_doc = db.collection('users').document(requester_id).get()
         final_parent_id = body.parent_id
         if requester_doc.exists and requester_doc.to_dict().get('role') == 'nutritionist':
             final_parent_id = requester_id
         
-        # 3. Create Auth User
         user = auth.create_user(
             email=body.email, 
             password=body.password, 
@@ -304,7 +298,6 @@ async def admin_create_user(body: CreateUserRequest, requester_id: str = Depends
         )
         auth.set_custom_user_claims(user.uid, {'role': body.role})
         
-        # 4. Create Firestore Document (Clean State)
         db.collection('users').document(user.uid).set({
             'uid': user.uid, 
             'email': body.email, 
@@ -325,8 +318,6 @@ async def admin_create_user(body: CreateUserRequest, requester_id: str = Depends
 async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_id: str = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
-        
-        # Update Auth
         update_args = {}
         if body.email: update_args['email'] = body.email
         if body.first_name or body.last_name:
@@ -339,7 +330,6 @@ async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_
         if update_args:
             auth.update_user(target_uid, **update_args)
 
-        # Update Firestore
         fs_update = {}
         if body.email: fs_update['email'] = body.email
         if body.first_name: fs_update['first_name'] = body.first_name
@@ -356,7 +346,6 @@ async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester_
 async def admin_assign_user(body: AssignUserRequest, requester_id: str = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
-        # Change role to user, assign parent
         db.collection('users').document(body.target_uid).update({
             'role': 'user',
             'parent_id': body.nutritionist_id,
@@ -371,7 +360,6 @@ async def admin_assign_user(body: AssignUserRequest, requester_id: str = Depends
 async def admin_unassign_user(body: UnassignUserRequest, requester_id: str = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
-        # Revert role to independent, remove parent
         db.collection('users').document(body.target_uid).update({
             'role': 'independent',
             'parent_id': firestore.DELETE_FIELD,
@@ -394,21 +382,15 @@ async def admin_delete_user(target_uid: str, requester_id: str = Depends(verify_
 
 @app.post("/admin/sync-users")
 async def admin_sync_users(requester_id: str = Depends(verify_admin)):
-    # requester_id è già l'uid validato dall'admin
     try:
         db = firebase_admin.firestore.client()
         count = 0
-        
-        # Iterate through all Auth users
         for user in auth.list_users().users:
-            
-            # 1. GHOST BUSTER
             email_docs = db.collection('users').where('email', '==', user.email).stream()
             for doc in email_docs:
                 if doc.id != user.uid:
                     doc.reference.delete()
 
-            # 2. Create missing document & Recupera Ruolo
             current_role = 'independent'
             user_doc = db.collection('users').document(user.uid).get()
             
@@ -424,7 +406,6 @@ async def admin_sync_users(requester_id: str = Depends(verify_admin)):
                     'created_at': firebase_admin.firestore.SERVER_TIMESTAMP
                 })
             
-            # 3. UPDATE CLAIMS (Il fix magico)
             auth.set_custom_user_claims(user.uid, {'role': current_role})
             count += 1
                 
@@ -444,7 +425,6 @@ async def upload_parser_config(target_uid: str, file: UploadFile = File(...), re
             'parser_updated_at': firebase_admin.firestore.SERVER_TIMESTAMP
         })
         
-        # History
         db.collection('users').document(target_uid).collection('parser_history').add({
             'content': content,
             'uploaded_at': firebase_admin.firestore.SERVER_TIMESTAMP,
@@ -455,29 +435,121 @@ async def upload_parser_config(target_uid: str, file: UploadFile = File(...), re
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- AUDIT & SECURE GATEWAY ---
+
 @app.post("/admin/log-access")
-async def log_sensitive_access(body: LogAccessRequest, requester_id: str = Depends(verify_admin)):
+async def log_access(body: LogAccessRequest, requester_id: str = Depends(verify_admin)):
     """
-    Registra un accesso ai dati sensibili (PII) per audit.
+    Registra esplicitamente l'accesso ai dati di un utente (sblocco maschera).
+    """
+    try:
+        db = firebase_admin.firestore.client()
+        db.collection('access_logs').add({
+            'requester_id': requester_id,
+            'target_uid': body.target_uid,
+            'action': 'UNLOCK_PII',
+            'reason': body.reason or 'User Unlock',
+            'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP,
+            'user_agent': 'kybo_admin_panel'
+        })
+        return {"status": "logged"}
+    except Exception as e:
+        logger.error("log_access_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to log access")
+
+@app.get("/admin/user-history/{target_uid}")
+async def get_secure_user_history(target_uid: str, requester_id: str = Depends(verify_admin)):
+    """
+    Recupera lo storico diete (SOLO METADATI PER ADMIN).
+    Logga l'accesso e RIMUOVE il contenuto sensibile della dieta.
     """
     try:
         db = firebase_admin.firestore.client()
         
-        # Salviamo il log. Non permettiamo la modifica o cancellazione da API standard.
+        # 1. AUDIT LOG
         db.collection('access_logs').add({
             'requester_id': requester_id,
-            'target_uid': body.target_uid,
-            'action': 'UNLOCK_PII_VIEW', # PII = Personally Identifiable Information
-            'reason': body.reason,
+            'target_uid': target_uid,
+            'action': 'READ_HISTORY_METADATA',
+            'reason': 'Admin Audit Check',
+            'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP,
+            'user_agent': 'kybo_secure_gateway'
+        })
+        
+        # 2. PRELIEVO DATI
+        history_ref = db.collection('diet_history')\
+                        .where('userId', '==', target_uid)\
+                        .order_by('uploadedAt', direction=firestore.Query.DESCENDING)\
+                        .limit(50)
+                        
+        history_docs = history_ref.stream()
+        
+        results = []
+        for doc in history_docs:
+            data = doc.to_dict()
+            
+            # --- FILTRO PRIVACY ASSOLUTA ---
+            if 'parsedData' in data:
+                del data['parsedData']  # CANCELLA il contenuto
+            
+            if 'uploadedAt' in data and data['uploadedAt']:
+                data['uploadedAt'] = data['uploadedAt'].isoformat()
+            data['id'] = doc.id
+            results.append(data)
+            
+        return results
+
+    except Exception as e:
+        logger.error("secure_gateway_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Errore recupero storico")
+
+@app.get("/admin/users-secure")
+async def list_users_secure(requester_id: str = Depends(verify_admin)):
+    try:
+        db = firebase_admin.firestore.client()
+        db.collection('access_logs').add({
+            'requester_id': requester_id,
+            'action': 'READ_USER_DIRECTORY',
+            'reason': 'User List View',
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP,
             'user_agent': 'kybo_admin_panel'
         })
         
-        return {"status": "logged", "message": "Access recorded securely"}
+        users_ref = db.collection('users')
+        docs = users_ref.stream()
+        
+        results = []
+        for doc in docs:
+            d = doc.to_dict()
+            results.append(d)
+            
+        return results
     except Exception as e:
-        # Se il log fallisce, l'accesso DEVE essere negato (fail-safe)
-        raise HTTPException(status_code=500, detail=f"Audit log failed: {str(e)}")
-    
+        logger.error("secure_user_list_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Errore recupero utenti")
+
+@app.get("/admin/user-details-secure/{target_uid}")
+async def get_user_details_secure(target_uid: str, requester_id: str = Depends(verify_admin)):
+    try:
+        db = firebase_admin.firestore.client()
+        db.collection('access_logs').add({
+            'requester_id': requester_id,
+            'target_uid': target_uid,
+            'action': 'READ_USER_PROFILE',
+            'reason': 'Admin Detail View',
+            'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP,
+            'user_agent': 'kybo_admin_panel'
+        })
+        
+        doc = db.collection('users').document(target_uid).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Utente non trovato")
+            
+        return doc.to_dict()
+    except Exception as e:
+        logger.error("secure_user_detail_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Errore recupero profilo")
+
 # --- MAINTENANCE & HELPERS ---
 
 @app.get("/admin/config/maintenance")
@@ -486,7 +558,7 @@ async def get_maintenance_status(requester_id: str = Depends(verify_admin)):
     return {"enabled": doc.to_dict().get('maintenance_mode', False)} if doc.exists else {"enabled": False}
 
 @app.post("/admin/config/maintenance")
-async def set_maintenance_status(body: MaintenanceRequest, requester_id: str = Depends(verify_admin)): # <--- ERA get_current_uid (INSICURO)
+async def set_maintenance_status(body: MaintenanceRequest, requester_id: str = Depends(verify_admin)):
     data = {'maintenance_mode': body.enabled, 'updated_by': requester_id}
     if body.message:
         data['maintenance_message'] = body.message
@@ -494,7 +566,7 @@ async def set_maintenance_status(body: MaintenanceRequest, requester_id: str = D
     return {"message": "Updated"}
 
 @app.post("/admin/schedule-maintenance")
-async def schedule_maintenance(req: ScheduleMaintenanceRequest, admin_uid: str = Depends(verify_admin)): # <--- ERA get_current_uid
+async def schedule_maintenance(req: ScheduleMaintenanceRequest, admin_uid: str = Depends(verify_admin)):
     firebase_admin.firestore.client().collection('config').document('global').set({
         "scheduled_maintenance_start": req.scheduled_time,
         "maintenance_message": req.message,
@@ -508,20 +580,19 @@ async def schedule_maintenance(req: ScheduleMaintenanceRequest, admin_uid: str =
     return {"status": "scheduled"}
 
 @app.post("/admin/cancel-maintenance")
-async def cancel_maintenance_schedule(requester_id: str = Depends(verify_admin)): # <--- ERA get_current_uid
+async def cancel_maintenance_schedule(requester_id: str = Depends(verify_admin)):
     firebase_admin.firestore.client().collection('config').document('global').update({
         "is_scheduled": False,
         "scheduled_maintenance_start": firestore.DELETE_FIELD,
         "maintenance_message": firestore.DELETE_FIELD
     })
     return {"status": "cancelled"}
-
+    
 def _convert_to_app_format(gemini_output) -> DietResponse:
     if not gemini_output: return DietResponse(plan={}, substitutions={})
     app_plan, app_substitutions = {}, {}
     cad_map = {}
     
-    # 1. Mappatura Sostituzioni (Invariata)
     for g in gemini_output.get('tabella_sostituzioni', []):
         if g.get('cad_code', 0) > 0:
             cad_map[g.get('titolo', '').strip().lower()] = g['cad_code']
@@ -532,7 +603,6 @@ def _convert_to_app_format(gemini_output) -> DietResponse:
 
     day_map = {"lun": "Lunedì", "mar": "Martedì", "mer": "Mercoledì", "gio": "Giovedì", "ven": "Venerdì", "sab": "Sabato", "dom": "Domenica"}
     
-    # 2. Costruzione Piano Settimanale (AGGIORNATA)
     for day in gemini_output.get('piano_settimanale', []):
         raw_name = day.get('giorno', '').lower().strip()
         day_name = day_map.get(raw_name[:3], raw_name.capitalize())
@@ -544,13 +614,8 @@ def _convert_to_app_format(gemini_output) -> DietResponse:
             for d in meal.get('elenco_piatti', []):
                 d_name = d.get('nome_piatto') or 'Piatto'
                 
-                # --- FIX CRITICO QUI SOTTO ---
-                # Generiamo un UUID univoco per ogni piatto, a prescindere dal cad_code.
-                # Se Gemini non dà un cad_code, usiamo 0 (come da logica base),
-                # ma l'instance_id renderà questo oggetto unico nel database.
-                
                 new_dish = Dish(
-                    instance_id=str(uuid.uuid4()), # <--- GENERA ID UNIVOCI
+                    instance_id=str(uuid.uuid4()),
                     name=d_name,
                     qty=str(d.get('quantita_totale') or ''),
                     cad_code=d.get('cad_code', 0) or cad_map.get(d_name.lower(), 0),
@@ -558,14 +623,12 @@ def _convert_to_app_format(gemini_output) -> DietResponse:
                     ingredients=[Ingredient(name=str(i.get('nome','')), qty=str(i.get('quantita',''))) for i in d.get('ingredienti', [])]
                 )
                 dishes.append(new_dish)
-                # -----------------------------
 
             if m_name in app_plan[day_name]: 
                 app_plan[day_name][m_name].extend(dishes)
             else: 
                 app_plan[day_name][m_name] = dishes
 
-    # Ordinamento Pasti (Invariato)
     for d, meals in app_plan.items():
         app_plan[d] = {k: meals[k] for k in MEAL_ORDER if k in meals}
         for k in meals: 
