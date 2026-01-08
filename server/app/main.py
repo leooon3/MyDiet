@@ -339,16 +339,11 @@ async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester:
 async def admin_assign_user(body: AssignUserRequest, requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
-        
-        # LOG ASSIGNMENT
         db.collection('access_logs').add({
-            'requester_id': requester['uid'],
-            'target_uid': body.target_uid,
-            'action': 'ASSIGN_USER',
-            'reason': f"Assigned to {body.nutritionist_id}",
+            'requester_id': requester['uid'], 'target_uid': body.target_uid,
+            'action': 'ASSIGN_USER', 'reason': f"Assigned to {body.nutritionist_id}",
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
         })
-        
         db.collection('users').document(body.target_uid).update({
             'role': 'user', 'parent_id': body.nutritionist_id,
             'updated_at': firebase_admin.firestore.SERVER_TIMESTAMP
@@ -362,16 +357,11 @@ async def admin_assign_user(body: AssignUserRequest, requester: dict = Depends(v
 async def admin_unassign_user(body: UnassignUserRequest, requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
-        
-        # LOG UNASSIGNMENT
         db.collection('access_logs').add({
-            'requester_id': requester['uid'],
-            'target_uid': body.target_uid,
-            'action': 'UNASSIGN_USER',
-            'reason': "Restored to Independent",
+            'requester_id': requester['uid'], 'target_uid': body.target_uid,
+            'action': 'UNASSIGN_USER', 'reason': "Restored to Independent",
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
         })
-        
         db.collection('users').document(body.target_uid).update({
             'role': 'independent', 'parent_id': firestore.DELETE_FIELD,
             'updated_at': firebase_admin.firestore.SERVER_TIMESTAMP
@@ -381,37 +371,61 @@ async def admin_unassign_user(body: UnassignUserRequest, requester: dict = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# AGGIORNATO: Abilitato eliminazione per Professional (Admin + Nutrizionista proprietario) + LOG
 @app.delete("/admin/delete-user/{target_uid}")
 async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_professional)):
     requester_id = requester['uid']
     requester_role = requester['role']
-    
     try:
         db = firebase_admin.firestore.client()
-        
-        # Check ownership se non è admin
         if requester_role == 'nutritionist':
              user_doc = db.collection('users').document(target_uid).get()
              if not user_doc.exists: return {"message": "User already deleted"}
              data = user_doc.to_dict()
              if data.get('parent_id') != requester_id and data.get('created_by') != requester_id:
                   raise HTTPException(status_code=403, detail="Cannot delete this user")
-
-        # LOG DELETION
         db.collection('access_logs').add({
-            'requester_id': requester_id,
-            'target_uid': target_uid,
-            'action': 'DELETE_USER',
-            'reason': 'Permanent Deletion',
+            'requester_id': requester_id, 'target_uid': target_uid,
+            'action': 'DELETE_USER', 'reason': 'Permanent Deletion',
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
         })
-
         try: auth.delete_user(target_uid)
         except: pass
         db.collection('users').document(target_uid).delete()
-        
         return {"message": "Deleted"}
+    except HTTPException as he: raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/admin/delete-diet/{diet_id}")
+async def admin_delete_diet(diet_id: str, requester: dict = Depends(verify_professional)):
+    requester_id = requester['uid']
+    requester_role = requester['role']
+    try:
+        db = firebase_admin.firestore.client()
+        diet_doc = db.collection('diet_history').document(diet_id).get()
+        if not diet_doc.exists: return {"message": "Already deleted"}
+        
+        diet_data = diet_doc.to_dict()
+        user_id = diet_data.get('userId')
+        
+        # Check ownership per Nutrizionista
+        if requester_role == 'nutritionist':
+            if diet_data.get('uploadedBy') != requester_id:
+                 # Se non l'ho caricata io, controllo se l'utente è mio
+                 if user_id:
+                     user_doc = db.collection('users').document(user_id).get()
+                     if user_doc.exists and user_doc.to_dict().get('parent_id') != requester_id:
+                         raise HTTPException(status_code=403, detail="Not authorized")
+
+        db.collection('access_logs').add({
+            'requester_id': requester_id, 'target_uid': user_id,
+            'action': 'DELETE_DIET_HISTORY', 
+            'reason': f"Deleted file: {diet_data.get('fileName')}",
+            'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
+        })
+        
+        db.collection('diet_history').document(diet_id).delete()
+        return {"message": "Diet deleted"}
     except HTTPException as he: raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -472,7 +486,6 @@ async def log_access(body: LogAccessRequest, requester: dict = Depends(verify_pr
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to log access")
 
-# AGGIORNATO: Non cancella più 'parsedData' se l'utente ha i diritti (es. Nutrizionista)
 @app.get("/admin/user-history/{target_uid}")
 async def get_secure_user_history(target_uid: str, requester: dict = Depends(verify_professional)):
     requester_id = requester['uid']
@@ -480,7 +493,6 @@ async def get_secure_user_history(target_uid: str, requester: dict = Depends(ver
     
     try:
         db = firebase_admin.firestore.client()
-        
         if requester_role == 'nutritionist':
             user_doc = db.collection('users').document(target_uid).get()
             if not user_doc.exists: raise HTTPException(status_code=404, detail="User not found")
@@ -488,12 +500,9 @@ async def get_secure_user_history(target_uid: str, requester: dict = Depends(ver
             if data.get('parent_id') != requester_id and data.get('created_by') != requester_id:
                 raise HTTPException(status_code=403, detail="Access denied")
 
-        # LOG AUDIT (Anche se legge, logghiamo che ha guardato)
         db.collection('access_logs').add({
-            'requester_id': requester_id,
-            'target_uid': target_uid,
-            'action': 'READ_HISTORY_FULL',
-            'reason': 'Diet Review',
+            'requester_id': requester_id, 'target_uid': target_uid,
+            'action': 'READ_HISTORY_FULL', 'reason': 'Diet Review',
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
         })
         
@@ -505,12 +514,10 @@ async def get_secure_user_history(target_uid: str, requester: dict = Depends(ver
         results = []
         for doc in history_ref.stream():
             data = doc.to_dict()
-            # [MODIFICA] NON CANCELLIAMO parsedData. Il professionista deve leggere.
             if 'uploadedAt' in data and data['uploadedAt']:
                 data['uploadedAt'] = data['uploadedAt'].isoformat()
             data['id'] = doc.id
             results.append(data)
-            
         return results
     except HTTPException as he: raise he
     except Exception as e:
@@ -527,13 +534,11 @@ async def list_users_secure(requester: dict = Depends(verify_professional)):
             'requester_id': requester_id, 'action': 'READ_USER_DIRECTORY',
             'reason': 'User List View', 'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
         })
-        
         users_ref = db.collection('users')
         if requester_role == 'nutritionist':
             docs = users_ref.where('parent_id', '==', requester_id).stream()
         else:
             docs = users_ref.stream()
-        
         return [d.to_dict() for d in docs]
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error fetching users")
@@ -563,7 +568,6 @@ async def get_user_details_secure(target_uid: str, requester: dict = Depends(ver
         raise HTTPException(status_code=500, detail="Error fetching profile")
 
 # --- MAINTENANCE ---
-# (Stesse funzioni di prima)
 @app.get("/admin/config/maintenance")
 async def get_maintenance_status(requester: dict = Depends(verify_admin)):
     doc = firebase_admin.firestore.client().collection('config').document('global').get()
