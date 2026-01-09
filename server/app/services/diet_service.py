@@ -3,6 +3,7 @@ import re
 import io
 import pdfplumber
 import os
+import typing_extensions as typing
 from google import genai
 from google.genai import types
 from app.core.config import settings
@@ -13,9 +14,8 @@ from app.models.schemas import (
     SubstitutionGroup, 
     SubstitutionOption
 )
-import typing_extensions as typing
 
-# --- DATA SCHEMAS (Your Original TypedDicts) ---
+# --- DATA SCHEMAS ---
 class Ingrediente(typing.TypedDict):
     nome: str
     quantita: str
@@ -60,7 +60,7 @@ class DietParser:
 
         # [DEFAULT SYSTEM INSTRUCTION]
         self.system_instruction = """
-You are an expert AI Nutritionist and Data Analyst capable of understanding any language (English, Spanish, French, German, Italian, etc.).
+You are an expert AI Nutritionist and Data Analyst capable of understanding any language.
 
 YOUR TASK:
 Extract the weekly diet plan from the provided document.
@@ -68,49 +68,30 @@ Extract the weekly diet plan from the provided document.
 CRITICAL RULES FOR MULTI-LANGUAGE SUPPORT:
 1. **Detect Language**: Read the document in its original language.
 2. **Translate Structure (Required)**: 
-   - You MUST translate the **Day of the Week** into Italian (e.g., "Monday" -> "Lunedì", "Domingo" -> "Domenica") for the `giorno` field.
-   - You MUST translate the **Meal Category** into Italian (e.g., "Breakfast" -> "Colazione", "Lunch" -> "Pranzo", "Snack" -> "Spuntino", "Dinner" -> "Cena") for the `tipo_pasto` field.
+   - You MUST translate the **Day of the Week** into Italian.
+   - You MUST translate the **Meal Category** into Italian.
 3. **Preserve Content**: 
-   - Keep the **Dish Names**, **Ingredients**, and **Quantities** in the **ORIGINAL LANGUAGE** of the document. Do not translate the food itself.
-
-SIMPLIFIED SCHEMA RULES:
-1. **Weekly Plan Only**: Extract every meal for every day found.
-2. **No Substitutions**: This diet type implies no alternatives. You MUST return an empty list `[]` for the field `tabella_sostituzioni`.
-3. **No CAD Codes**: Set `cad_code` to 0 for all items.
+   - Keep the **Dish Names**, **Ingredients**, and **Quantities** in the **ORIGINAL LANGUAGE**.
 
 OUTPUT FORMAT (Strict JSON):
 {
-  "piano_settimanale": [
-    {
-      "giorno": "Lunedì", 
-      "pasti": [
-        {
-          "tipo_pasto": "Colazione",
-          "elenco_piatti": [
-             { 
-               "nome_piatto": "Oatmeal with berries", 
-               "quantita_totale": "50g", 
-               "cad_code": 0, 
-               "tipo": "semplice", 
-               "ingredienti": [] 
-             }
-          ]
-        }
-      ]
-    }
-  ],
+  "piano_settimanale": [],
   "tabella_sostituzioni": []
 }"""
 
-    def _extract_text_from_pdf(self, pdf_path: str) -> str:
-        # [PRESERVED] Your Memory Optimization using StringIO
+    def _extract_text_from_pdf(self, file_input: typing.Union[str, bytes]) -> str:
         text_buffer = io.StringIO()
         try:
-            file_size = os.path.getsize(pdf_path)
-            if file_size > 10 * 1024 * 1024: 
-                raise ValueError("PDF troppo grande per l'elaborazione (Max 10MB).")
+            if isinstance(file_input, bytes):
+                if len(file_input) > 10 * 1024 * 1024:
+                    raise ValueError("PDF troppo grande (Max 10MB).")
+                pdf_file = pdfplumber.open(io.BytesIO(file_input))
+            else:
+                if os.path.getsize(file_input) > 10 * 1024 * 1024: 
+                    raise ValueError("PDF troppo grande.")
+                pdf_file = pdfplumber.open(file_input)
 
-            with pdfplumber.open(pdf_path) as pdf:
+            with pdf_file as pdf:
                 if len(pdf.pages) > 50:
                     raise ValueError("Il PDF ha troppe pagine (Max 50).")
                 
@@ -127,47 +108,53 @@ OUTPUT FORMAT (Strict JSON):
         finally:
             text_buffer.close()
 
-    def _extract_json_from_text(self, text: str):
-        # [PRESERVED] Your Robust JSON extraction
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-
-        # Try to find JSON block delimiters
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
-            clean_text = match.group(0)
-            try:
-                return json.loads(clean_text)
-            except json.JSONDecodeError:
-                pass
+    def _sanitize_text(self, text: str) -> str:
+        """
+        Rimuove PII (Personally Identifiable Information) comuni per GDPR.
+        """
+        # 1. Codice Fiscale Italiano (Pattern generico)
+        text = re.sub(r'[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]', '[GDPR_CF_REDACTED]', text)
         
-        raise ValueError("Impossibile estrarre JSON valido dalla risposta Gemini.")
+        # 2. Email
+        text = re.sub(r'[\w\.-]+@[\w\.-]+\.\w+', '[GDPR_EMAIL_REDACTED]', text)
+        
+        # 3. Numeri di telefono (Generico Italia/Intl)
+        text = re.sub(r'(?:\+39|0039)?\s?3\d{2}\s?\d{6,7}', '[GDPR_PHONE_REDACTED]', text)
+        
+        # 4. Pattern Intestazioni Comuni (Rimuove la riga intera)
+        lines = text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            lower_line = line.lower().strip()
+            if any(prefix in lower_line for prefix in ['paziente:', 'nome:', 'indirizzo:', 'nato il:', 'cf:', 'dott.', 'biologo', 'nutrizionista']):
+                continue # Salta la riga contenente dati anagrafici o medici
+            cleaned_lines.append(line)
+            
+        return "\n".join(cleaned_lines)
 
-    # [UPDATED] Added optional custom_instructions parameter
-    def parse_complex_diet(self, file_path: str, custom_instructions: str = None):
+    def parse_complex_diet(self, file_input: typing.Union[str, bytes], custom_instructions: str = None):
         if not self.client:
             raise ValueError("Client Gemini non inizializzato (manca API KEY).")
 
-        diet_text = self._extract_text_from_pdf(file_path)
-        if not diet_text:
-            raise ValueError("PDF vuoto o illeggibile.")
+        raw_text = self._extract_text_from_pdf(file_input)
 
-        model_name = settings.GEMINI_MODEL
+        if not raw_text:
+             raise ValueError("PDF vuoto o illeggibile.")
         
-        # [NEW LOGIC] Determine which prompt to use
-        # If custom_instructions exists, use it. Otherwise, use self.system_instruction.
+        # APPLICAZIONE SANITIZZAZIONE
+        safe_text = self._sanitize_text(raw_text)
+             
+        model_name = settings.GEMINI_MODEL
         final_instruction = custom_instructions if custom_instructions else self.system_instruction
         
         try:
-            print(f"🤖 Analisi Gemini ({model_name})... Using Custom Prompt: {bool(custom_instructions)}")
+            print(f"🤖 Analisi Gemini ({model_name})... Custom Prompt: {bool(custom_instructions)}")
             
             prompt = f"""
             Analizza il seguente testo ed estrai i dati della dieta e le sostituzioni CAD.
             
             <source_document>
-            {diet_text}
+            {safe_text}
             </source_document>
             """
 
@@ -175,19 +162,19 @@ OUTPUT FORMAT (Strict JSON):
                 model=model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    system_instruction=final_instruction, # <--- Uses the dynamic prompt
+                    system_instruction=final_instruction,
                     response_mime_type="application/json",
                     response_schema=OutputDietaCompleto
                 )
             )
             
-            # Prioritize structured parsing provided by SDK
             if hasattr(response, 'parsed') and response.parsed:
                 return response.parsed
             
-            # Fallback to text parsing
             if hasattr(response, 'text') and response.text:
-                return self._extract_json_from_text(response.text)
+                # Fallback per parsing manuale se SDK fallisce il binding
+                cleaned_json = response.text.replace("```json", "").replace("```", "")
+                return json.loads(cleaned_json)
             
             raise ValueError("Risposta vuota da Gemini")
 

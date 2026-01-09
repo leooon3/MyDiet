@@ -1,8 +1,3 @@
-import pytesseract
-from PIL import Image, UnidentifiedImageError
-import pdfplumber
-import os
-import json
 import typing_extensions as typing
 from google import genai
 from google.genai import types
@@ -11,14 +6,14 @@ from app.core.config import settings
 # --- DATA SCHEMAS ---
 class ReceiptItem(typing.TypedDict):
     name: str
-    quantity: str # Kept as string to allow "1kg", "2pz", etc.
+    quantity: str 
 
 class ReceiptAnalysis(typing.TypedDict):
     items: list[ReceiptItem]
 
 class ReceiptScanner:
     def __init__(self, allowed_foods_list: list[str]):
-        # [INIT] Setup Gemini Client (The "Diet Way")
+        # [INIT] Setup Gemini Client
         api_key = settings.GOOGLE_API_KEY
         if not api_key:
             print("❌ CRITICAL ERROR: GOOGLE_API_KEY not found!")
@@ -33,56 +28,20 @@ class ReceiptScanner:
 
         # [FIX] Relaxed rules to allow all food items while prioritizing the diet list
         self.system_instruction = """
-        You are an AI assistant for a diet app. Your task is to analyze receipt text and extract purchased food items.
+        You are an AI assistant for a diet app. Your task is to analyze receipt images and extract purchased food items.
         
         CRITICAL RULES:
-        1. **Extract Food Items**: Identify and extract all clearly identifiable food and grocery items.
+        1. **Extract Food Items**: Identify and extract all clearly identifiable food and grocery items from the image.
         2. **Use Context for Cleanup**: You are provided with an 'ALLOWED FOODS LIST'. 
            - If an item on the receipt matches a food in the list (even vaguely), prefer the naming from the list.
            - If an item is NOT in the list but is clearly food, EXTRACT IT ANYWAY using its name from the receipt.
-        3. **Ignore Non-Food**: Strictly ignore taxes, totals, discounts, store info, payment details, and non-edible goods (detergents, etc.).
+        3. **Ignore Non-Food**: Strictly ignore taxes, totals, discounts, store info, payment details, and non-edible goods.
         4. **Output Format**: Return a strictly structured JSON with a list of items.
         """
 
-    def extract_text_from_file(self, file_path):
-        text = ""
-        try:
-            # DoS Protection: Check file size (Max 10MB)
-            if os.path.getsize(file_path) > 10 * 1024 * 1024:
-                print("❌ File too large for OCR")
-                return ""
-
-            if file_path.lower().endswith('.pdf'):
-                print("  📄 Mode: Digital PDF")
-                with pdfplumber.open(file_path) as pdf:
-                    if len(pdf.pages) > 20:
-                        print("❌ PDF exceeds page limit (20)")
-                        return ""
-                    for page in pdf.pages:
-                        extracted = page.extract_text()
-                        if extracted: text += extracted + "\n"
-            else:
-                print("  📷 Mode: Image OCR")
-                with Image.open(file_path) as img:
-                    img.verify()
-                with Image.open(file_path) as img:
-                    Image.MAX_IMAGE_PIXELS = 20000000
-                    text = pytesseract.image_to_string(img, lang='ita')
-        except UnidentifiedImageError:
-            print("[FILE ERROR] Invalid image format")
-        except Exception as e:
-            print(f"[FILE ERROR] {e}")
-        return text
-
-    def scan_receipt(self, file_path):
-        print(f"\n--- Receipt Analysis (Gemini Powered): {file_path} ---")
+    def scan_receipt(self, file_content, mime_type):
+        print(f"\n--- Receipt Analysis (Gemini Vision) ---")
         
-        # 1. Extract Raw Text (OCR)
-        full_text = self.extract_text_from_file(file_path)
-        if not full_text: 
-            return []
-        
-        # 2. Prepare Prompt
         if not self.client:
             print("⚠️ Gemini Client missing. Returning empty.")
             return []
@@ -92,19 +51,20 @@ class ReceiptScanner:
         {self.allowed_foods_str}
         </allowed_foods_list>
 
-        <receipt_text>
-        {full_text}
-        </receipt_text>
+        Analizza l'immagine dello scontrino fornita. Estrai gli articoli che corrispondono alla lista consentita.
         """
 
         try:
             model_name = settings.GEMINI_MODEL
-            print(f"🤖 Sending to Gemini ({model_name})...")
+            print(f"🤖 Sending Image + Prompt to Gemini ({model_name})...")
 
-            # 3. Call Gemini
+            # 1. Prepare Image Part
+            image_part = types.Part.from_bytes(data=file_content, mime_type=mime_type)
+
+            # 2. Call Gemini (Multimodal: Text + Image)
             response = self.client.models.generate_content(
                 model=model_name,
-                contents=prompt,
+                contents=[prompt, image_part],
                 config=types.GenerateContentConfig(
                     system_instruction=self.system_instruction,
                     response_mime_type="application/json",
@@ -112,11 +72,11 @@ class ReceiptScanner:
                 )
             )
 
-            # 4. Parse Response
+            # 3. Parse Response
             found_items = []
             if hasattr(response, 'parsed') and response.parsed:
                 data = response.parsed
-                # Handle both dict and object return types from SDK
+                # Gestione robusta sia per dict che per oggetti tipizzati
                 items_list = data.get('items', []) if isinstance(data, dict) else data.items
                 
                 for item in items_list:

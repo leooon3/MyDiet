@@ -32,10 +32,6 @@ from app.broadcast import broadcast_message
 MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".webp"}
 
-MEAL_ORDER = [
-    "Colazione", "Seconda Colazione", "Spuntino", "Pranzo",
-    "Merenda", "Cena", "Spuntino Serale", "Nell'Arco Della Giornata"
-]
 
 structlog.configure(
     processors=[
@@ -112,19 +108,19 @@ class LogAccessRequest(BaseModel):
     
 # --- UTILS & SECURITY ---
 
-async def save_upload_file(file: UploadFile, filename: str) -> None:
-    size = 0
-    try:
-        async with aiofiles.open(filename, 'wb') as out_file:
-            while content := await file.read(1024 * 1024):
-                size += len(content)
-                if size > MAX_FILE_SIZE:
-                    raise HTTPException(status_code=413, detail="File too large")
-                await out_file.write(content)
-    except Exception as e:
-        if os.path.exists(filename):
-            os.remove(filename)
-        raise e
+#async def save_upload_file(file: UploadFile, filename: str) -> None:
+#    size = 0
+#    try:
+#        async with aiofiles.open(filename, 'wb') as out_file:
+#            while content := await file.read(1024 * 1024):
+#               size += len(content)
+#                if size > MAX_FILE_SIZE:
+#                    raise HTTPException(status_code=413, detail="File too large")
+#                await out_file.write(content)
+#    except Exception as e:
+#        if os.path.exists(filename):
+#            os.remove(filename)
+#        raise e
 
 def validate_extension(filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
@@ -214,34 +210,27 @@ async def start_background_tasks():
 @limiter.limit("5/minute")
 async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), user_id: str = Depends(get_current_uid)):
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
-    temp_filename = f"{uuid.uuid4()}.pdf"
-    try:
-        await save_upload_file(file, temp_filename)
-        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, temp_filename)
-        if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
-        return _convert_to_app_format(raw_data)
-    finally:
-        if os.path.exists(temp_filename): os.remove(temp_filename)
+    
+    # LEGGIAMO IN MEMORIA
+    content = await file.read()
+    
+    # Passiamo i bytes direttamente
+    raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, content)
+    
+    if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
+    return _convert_to_app_format(raw_data)
 
 @app.post("/upload-diet/{target_uid}", response_model=DietResponse)
 @limiter.limit("10/minute")
 async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), requester: dict = Depends(verify_professional)):
-    requester_id = requester['uid']
-    requester_role = requester['role']
+        requester_id = requester['uid']
+        
+        if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
+        
+        # LEGGIAMO IN MEMORIA
+        content = await file.read()
 
-    if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
-    
-    db = firebase_admin.firestore.client()
-    if requester_role == 'nutritionist':
-        target_doc = db.collection('users').document(target_uid).get()
-        if not target_doc.exists: raise HTTPException(status_code=404, detail="User not found")
-        data = target_doc.to_dict()
-        if data.get('parent_id') != requester_id and data.get('created_by') != requester_id:
-             raise HTTPException(status_code=403, detail="Non puoi caricare diete per questo utente")
-
-    temp_filename = f"{uuid.uuid4()}.pdf"
-    try:
-        await save_upload_file(file, temp_filename)
+        db = firebase_admin.firestore.client()
         custom_prompt = None
         user_doc = db.collection('users').document(target_uid).get()
         if user_doc.exists:
@@ -249,11 +238,13 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
             if parent_id:
                 parent_doc = db.collection('users').document(parent_id).get()
                 if parent_doc.exists: custom_prompt = parent_doc.to_dict().get('custom_parser_prompt')
-        
-        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, temp_filename, custom_prompt)
+
+        # Passiamo bytes
+        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, content, custom_prompt)
         formatted_data = _convert_to_app_format(raw_data)
         dict_data = formatted_data.dict()
 
+        # Salvataggio DB (rimane uguale)
         db.collection('diet_history').add({
             'userId': target_uid,
             'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
@@ -263,27 +254,27 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
         })
 
         db.collection('users').document(target_uid).collection('diets').add({
-            'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
-            'plan': dict_data.get('plan'),
-            'substitutions': dict_data.get('substitutions'),
-            'uploadedBy': 'nutritionist'
+                'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
+                'plan': dict_data.get('plan'),
+                'substitutions': dict_data.get('substitutions'),
+                'uploadedBy': 'nutritionist'
         })
-        
+            
         if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
         return formatted_data
-    finally:
-        if os.path.exists(temp_filename): os.remove(temp_filename)
 
 @app.post("/scan-receipt")
 async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_foods: Json[List[str]] = Form(...), user_id: str = Depends(get_current_uid)):
-    temp_filename = f"{uuid.uuid4()}{validate_extension(file.filename)}"
-    try:
-        await save_upload_file(file, temp_filename)
-        current_scanner = ReceiptScanner(allowed_foods_list=allowed_foods)
-        found_items = await run_in_threadpool(current_scanner.scan_receipt, temp_filename)
-        return JSONResponse(content=found_items)
-    finally:
-        if os.path.exists(temp_filename): os.remove(temp_filename)
+    # Legge il contenuto del file direttamente in memoria
+    file_content = await file.read()
+    
+    current_scanner = ReceiptScanner(allowed_foods_list=allowed_foods)
+    
+    # Passa i bytes (file_content) invece del percorso file
+    # Modifica questa riga:
+    found_items = await run_in_threadpool(current_scanner.scan_receipt, file_content, file.content_type)
+    
+    return JSONResponse(content=found_items)
 
 # --- USER MANAGEMENT ---
 
@@ -596,22 +587,21 @@ async def cancel_maintenance_schedule(requester: dict = Depends(verify_admin)):
         "is_scheduled": False, "scheduled_maintenance_start": firestore.DELETE_FIELD, "maintenance_message": firestore.DELETE_FIELD
     })
     return {"status": "cancelled"}
-    
+
+ 
 def _convert_to_app_format(gemini_output) -> DietResponse:
     if not gemini_output: return DietResponse(plan={}, substitutions={})
     app_plan, app_substitutions = {}, {}
     cad_map = {}
     
-    # 1. Mappatura Sostituzioni
+    # 1. Mappatura Sostituzioni (Invariato)
     for g in gemini_output.get('tabella_sostituzioni', []):
         if g.get('cad_code', 0) > 0:
             cad_map[g.get('titolo', '').strip().lower()] = g['cad_code']
-            
-            # Normalizziamo anche le opzioni delle sostituzioni
             clean_options = []
             for o in g.get('opzioni',[]):
                 raw_qty = o.get('quantita','')
-                clean_qty = normalize_quantity(raw_qty) # <--- NORMALIZZAZIONE QUI
+                clean_qty = normalize_quantity(raw_qty) 
                 clean_options.append(SubstitutionOption(name=o.get('nome',''), qty=clean_qty))
 
             app_substitutions[str(g['cad_code'])] = SubstitutionGroup(
@@ -621,27 +611,31 @@ def _convert_to_app_format(gemini_output) -> DietResponse:
 
     day_map = {"lun": "Lunedì", "mar": "Martedì", "mer": "Mercoledì", "gio": "Giovedì", "ven": "Venerdì", "sab": "Sabato", "dom": "Domenica"}
     
-    # 2. Costruzione Piano
+    # 2. Costruzione Piano (Dinamico)
+    # L'ordine è garantito dalla lista 'pasti' restituita da Gemini (che legge dall'alto in basso)
     for day in gemini_output.get('piano_settimanale', []):
         raw_name = day.get('giorno', '').lower().strip()
         day_name = day_map.get(raw_name[:3], raw_name.capitalize())
+        
+        # Usiamo un dict standard (in Python 3.7+ preserva l'ordine di inserimento)
         app_plan[day_name] = {}
         
         for meal in day.get('pasti', []):
-            m_name = normalize_meal_name(meal.get('tipo_pasto', ''))
+            # Normalizzazione minima solo per rimuovere spazi extra, ma manteniamo il nome originale
+            # Opzionale: normalize_meal_name(meal.get('tipo_pasto', '')) se vuoi ancora uniformare
+            # Per flessibilità totale, usa il nome grezzo:
+            m_name = meal.get('tipo_pasto', '').strip().capitalize() 
+            
             dishes = []
             for d in meal.get('elenco_piatti', []):
                 d_name = d.get('nome_piatto') or 'Piatto'
-                
-                # Normalizziamo la quantità totale del piatto
                 raw_dish_qty = str(d.get('quantita_totale') or '')
-                clean_dish_qty = normalize_quantity(raw_dish_qty) # <--- NORMALIZZAZIONE QUI
+                clean_dish_qty = normalize_quantity(raw_dish_qty)
 
-                # Normalizziamo gli ingredienti
                 clean_ingredients = []
                 for i in d.get('ingredienti', []):
                     raw_ing_qty = str(i.get('quantita',''))
-                    clean_ing_qty = normalize_quantity(raw_ing_qty) # <--- NORMALIZZAZIONE QUI
+                    clean_ing_qty = normalize_quantity(raw_ing_qty)
                     clean_ingredients.append(Ingredient(name=str(i.get('nome','')), qty=clean_ing_qty))
 
                 new_dish = Dish(
@@ -654,14 +648,13 @@ def _convert_to_app_format(gemini_output) -> DietResponse:
                 )
                 dishes.append(new_dish)
 
+            # Preserva l'ordine di arrivo
             if m_name in app_plan[day_name]: 
                 app_plan[day_name][m_name].extend(dishes)
             else: 
                 app_plan[day_name][m_name] = dishes
 
-    for d, meals in app_plan.items():
-        app_plan[d] = {k: meals[k] for k in MEAL_ORDER if k in meals}
-        for k in meals: 
-            if k not in app_plan[d]: app_plan[d][k] = meals[k]
+    # [RIMOSSO] Blocco di riordino forzato basato su MEAL_ORDER
+    # Non serve fare altro, app_plan[day] ha le chiavi nell'ordine di inserimento.
 
     return DietResponse(plan=app_plan, substitutions=app_substitutions)
