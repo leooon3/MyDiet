@@ -57,60 +57,43 @@ class DietParser:
         else:
             clean_key = api_key.strip().replace('"', '').replace("'", "")
             self.client = genai.Client(api_key=clean_key)
-
-        # [DEFAULT SYSTEM INSTRUCTION]
+        
+        # [System instruction originale mantenuta...]
         self.system_instruction = """
-You are an expert AI Nutritionist and Data Analyst capable of understanding any language (English, Spanish, French, German, Italian, etc.).
-
-YOUR TASK:
-Extract the weekly diet plan from the provided document.
-
+You are an expert AI Nutritionist and Data Analyst capable of understanding any language.
+YOUR TASK: Extract the weekly diet plan from the provided document.
 CRITICAL RULES FOR MULTI-LANGUAGE SUPPORT:
-1. **Detect Language**: Read the document in its original language.
-2. **Translate Structure (Required)**: 
-   - You MUST translate the **Day of the Week** into Italian (e.g., "Monday" -> "Lunedì", "Domingo" -> "Domenica") for the `giorno` field.
-   - You MUST translate the **Meal Category** into Italian (e.g., "Breakfast" -> "Colazione", "Lunch" -> "Pranzo", "Snack" -> "Spuntino", "Dinner" -> "Cena") for the `tipo_pasto` field.
-3. **Preserve Content**: 
-   - Keep the **Dish Names**, **Ingredients**, and **Quantities** in the **ORIGINAL LANGUAGE** of the document. Do not translate the food itself.
-
+1. Detect Language: Read the document in its original language.
+2. Translate Structure (Required): 
+   - Translate Day of the Week into Italian.
+   - Translate Meal Category into Italian.
+3. Preserve Content: Keep Dish Names, Ingredients, and Quantities in ORIGINAL LANGUAGE.
 SIMPLIFIED SCHEMA RULES:
-1. **Weekly Plan Only**: Extract every meal for every day found.
-2. **No Substitutions**: This diet type implies no alternatives. You MUST return an empty list `[]` for the field `tabella_sostituzioni`.
-3. **No CAD Codes**: Set `cad_code` to 0 for all items.
+1. Weekly Plan Only: Extract every meal.
+2. No Substitutions: Return empty list [].
+3. No CAD Codes: Set to 0.
+"""
 
-OUTPUT FORMAT (Strict JSON):
-{
-  "piano_settimanale": [
-    {
-      "giorno": "Lunedì", 
-      "pasti": [
-        {
-          "tipo_pasto": "Colazione",
-          "elenco_piatti": [
-             { 
-               "nome_piatto": "Oatmeal with berries", 
-               "quantita_totale": "50g", 
-               "cad_code": 0, 
-               "tipo": "semplice", 
-               "ingredienti": [] 
-             }
-          ]
-        }
-      ]
-    }
-  ],
-  "tabella_sostituzioni": []
-}"""
+    # --- 1.4 SANITIZZAZIONE GDPR (Re-integrata) ---
+    def _sanitize_text(self, text: str) -> str:
+        if not text: return ""
+        # Rimuove Email
+        text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL_OSCURATA]', text)
+        # Rimuove CF
+        text = re.sub(r'\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b', '[CF_OSCURATO]', text, flags=re.IGNORECASE)
+        # Rimuove Telefoni
+        text = re.sub(r'\b(\+39|0039)?\s?(3\d{2}|0\d{1,3})[\s\.-]?\d{6,10}\b', '[TEL_OSCURATO]', text)
+        # Rimuove Intestazioni Nomi
+        text = re.sub(r'(?i)(Paziente|Sig\.|Sig\.ra|Dott\.|Dr\.|Nome|Cognome|Spett\.le)\s*[:\.]?\s*[^\n]+', '[ANAGRAFICA_OSCURATA]', text)
+        return text
 
-    def _extract_text_from_pdf(self, pdf_path: str) -> str:
-        # [PRESERVED] Your Memory Optimization using StringIO
+    # --- 3.1 STREAMING I/O FIX ---
+    # Ora accetta 'file_obj' (stream) invece di 'pdf_path' (stringa)
+    def _extract_text_from_pdf(self, file_obj) -> str:
         text_buffer = io.StringIO()
         try:
-            file_size = os.path.getsize(pdf_path)
-            if file_size > 10 * 1024 * 1024: 
-                raise ValueError("PDF troppo grande per l'elaborazione (Max 10MB).")
-
-            with pdfplumber.open(pdf_path) as pdf:
+            # Apriamo direttamente l'oggetto in memoria senza toccare il disco
+            with pdfplumber.open(file_obj) as pdf:
                 if len(pdf.pages) > 50:
                     raise ValueError("Il PDF ha troppe pagine (Max 50).")
                 
@@ -128,13 +111,10 @@ OUTPUT FORMAT (Strict JSON):
             text_buffer.close()
 
     def _extract_json_from_text(self, text: str):
-        # [PRESERVED] Your Robust JSON extraction
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
-
-        # Try to find JSON block delimiters
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             clean_text = match.group(0)
@@ -142,30 +122,29 @@ OUTPUT FORMAT (Strict JSON):
                 return json.loads(clean_text)
             except json.JSONDecodeError:
                 pass
-        
-        raise ValueError("Impossibile estrarre JSON valido dalla risposta Gemini.")
+        raise ValueError("Impossibile estrarre JSON valido.")
 
-    # [UPDATED] Added optional custom_instructions parameter
-    def parse_complex_diet(self, file_path: str, custom_instructions: str = None):
+    # Ora accetta 'file_obj' come primo parametro
+    def parse_complex_diet(self, file_obj, custom_instructions: str = None):
         if not self.client:
-            raise ValueError("Client Gemini non inizializzato (manca API KEY).")
+            raise ValueError("Client Gemini non inizializzato.")
 
-        diet_text = self._extract_text_from_pdf(file_path)
-        if not diet_text:
+        # Estrai testo dallo stream (RAM)
+        raw_text = self._extract_text_from_pdf(file_obj)
+        if not raw_text:
             raise ValueError("PDF vuoto o illeggibile.")
+        
+        # Applica sanitizzazione GDPR
+        diet_text = self._sanitize_text(raw_text)
 
         model_name = settings.GEMINI_MODEL
-        
-        # [NEW LOGIC] Determine which prompt to use
-        # If custom_instructions exists, use it. Otherwise, use self.system_instruction.
         final_instruction = custom_instructions if custom_instructions else self.system_instruction
         
         try:
-            print(f"🤖 Analisi Gemini ({model_name})... Using Custom Prompt: {bool(custom_instructions)}")
+            print(f"🤖 Analisi Gemini ({model_name})... Custom Prompt: {bool(custom_instructions)}")
             
             prompt = f"""
             Analizza il seguente testo ed estrai i dati della dieta e le sostituzioni CAD.
-            
             <source_document>
             {diet_text}
             </source_document>
@@ -175,17 +154,14 @@ OUTPUT FORMAT (Strict JSON):
                 model=model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    system_instruction=final_instruction, # <--- Uses the dynamic prompt
+                    system_instruction=final_instruction,
                     response_mime_type="application/json",
                     response_schema=OutputDietaCompleto
                 )
             )
             
-            # Prioritize structured parsing provided by SDK
             if hasattr(response, 'parsed') and response.parsed:
                 return response.parsed
-            
-            # Fallback to text parsing
             if hasattr(response, 'text') and response.text:
                 return self._extract_json_from_text(response.text)
             

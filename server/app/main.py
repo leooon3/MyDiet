@@ -49,14 +49,19 @@ logger = structlog.get_logger()
 # --- FIREBASE INIT ---
 if not firebase_admin._apps:
     try:
-        if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        # Render Secret Files imposta automaticamente questa variabile al path del file
+        key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        
+        if key_path and os.path.exists(key_path):
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred)
+            logger.info("firebase_init_success", method="service_account_file", path=key_path)
+        else:
+            # Fallback per ambienti GCP nativi (opzionale, ma consigliato tenerlo)
             cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred)
-        elif os.path.exists("serviceAccountKey.json"):
-            cred = credentials.Certificate("serviceAccountKey.json")
-            firebase_admin.initialize_app(cred)
-        else:
-            logger.warning("firebase_init_fail", reason="no_credentials")
+            logger.info("firebase_init_success", method="adc")
+            
     except Exception as e:
         logger.error("firebase_init_critical_error", error=str(e))
 
@@ -112,20 +117,6 @@ class LogAccessRequest(BaseModel):
     
 # --- UTILS & SECURITY ---
 
-async def save_upload_file(file: UploadFile, filename: str) -> None:
-    size = 0
-    try:
-        async with aiofiles.open(filename, 'wb') as out_file:
-            while content := await file.read(1024 * 1024):
-                size += len(content)
-                if size > MAX_FILE_SIZE:
-                    raise HTTPException(status_code=413, detail="File too large")
-                await out_file.write(content)
-    except Exception as e:
-        if os.path.exists(filename):
-            os.remove(filename)
-        raise e
-
 def validate_extension(filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -147,14 +138,11 @@ async def verify_token(authorization: str = Header(...)):
 async def verify_admin(token: dict = Depends(verify_token)):
     role = token.get('role')
     uid = token.get('uid')
-    if role == 'admin': return {'uid': uid, 'role': 'admin'}
-    try:
-        db = firebase_admin.firestore.client()
-        user_doc = db.collection('users').document(uid).get()
-        if user_doc.exists and user_doc.to_dict().get('role') == 'admin':
-             auth.set_custom_user_claims(uid, {'role': 'admin'})
-             return {'uid': uid, 'role': 'admin'}
-    except: pass
+    
+    # Verifica SOLO il claim nel token sicuro
+    if role == 'admin': 
+        return {'uid': uid, 'role': 'admin'}
+        
     raise HTTPException(status_code=403, detail="Admin privileges required")
 
 async def verify_professional(token: dict = Depends(verify_token)):
@@ -214,24 +202,31 @@ async def start_background_tasks():
 @limiter.limit("5/minute")
 async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), user_id: str = Depends(get_current_uid)):
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
-    temp_filename = f"{uuid.uuid4()}.pdf"
+    
+    # [FIX 3.1] Streaming DIRETTO (RAM -> Parser)
     try:
-        await save_upload_file(file, temp_filename)
-        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, temp_filename)
+        # file.file è un oggetto "SpooledTemporaryFile" che si comporta come un file aperto
+        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, file.file)
+        
         if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
         return _convert_to_app_format(raw_data)
+    except Exception as e:
+        logger.error("upload_diet_error", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if os.path.exists(temp_filename): os.remove(temp_filename)
-
+        await file.close() # Chiudiamo lo stream correttamente
+ 
 @app.post("/upload-diet/{target_uid}", response_model=DietResponse)
 @limiter.limit("10/minute")
 async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), requester: dict = Depends(verify_professional)):
+    # ... (Codice permessi invariato) ...
     requester_id = requester['uid']
     requester_role = requester['role']
 
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
     
     db = firebase_admin.firestore.client()
+    # ... (Verifica permessi nutrizionista invariata) ...
     if requester_role == 'nutritionist':
         target_doc = db.collection('users').document(target_uid).get()
         if not target_doc.exists: raise HTTPException(status_code=404, detail="User not found")
@@ -239,9 +234,8 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
         if data.get('parent_id') != requester_id and data.get('created_by') != requester_id:
              raise HTTPException(status_code=403, detail="Non puoi caricare diete per questo utente")
 
-    temp_filename = f"{uuid.uuid4()}.pdf"
+    # [FIX 3.1] Streaming DIRETTO
     try:
-        await save_upload_file(file, temp_filename)
         custom_prompt = None
         user_doc = db.collection('users').document(target_uid).get()
         if user_doc.exists:
@@ -250,10 +244,12 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
                 parent_doc = db.collection('users').document(parent_id).get()
                 if parent_doc.exists: custom_prompt = parent_doc.to_dict().get('custom_parser_prompt')
         
-        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, temp_filename, custom_prompt)
+        # Passiamo file.file invece di un temp_filename
+        raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, file.file, custom_prompt)
         formatted_data = _convert_to_app_format(raw_data)
         dict_data = formatted_data.dict()
 
+        # ... (Salvataggio DB invariato) ...
         db.collection('diet_history').add({
             'userId': target_uid,
             'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
@@ -271,19 +267,30 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
         
         if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
         return formatted_data
-    finally:
-        if os.path.exists(temp_filename): os.remove(temp_filename)
 
+    except Exception as e:
+        logger.error("admin_upload_error", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await file.close()
+
+        
 @app.post("/scan-receipt")
 async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_foods: Json[List[str]] = Form(...), user_id: str = Depends(get_current_uid)):
-    temp_filename = f"{uuid.uuid4()}{validate_extension(file.filename)}"
+    # [FIX 3.2] Streaming + Cleanup
     try:
-        await save_upload_file(file, temp_filename)
+        # Istanziamo lo scanner con la lista (che verrà troncata se troppo lunga)
         current_scanner = ReceiptScanner(allowed_foods_list=allowed_foods)
-        found_items = await run_in_threadpool(current_scanner.scan_receipt, temp_filename)
+        
+        # Passiamo lo stream (file.file) invece di creare un temp file su disco
+        found_items = await run_in_threadpool(current_scanner.scan_receipt, file.file)
+        
         return JSONResponse(content=found_items)
+    except Exception as e:
+        logger.error("scan_receipt_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Errore durante la scansione dello scontrino")
     finally:
-        if os.path.exists(temp_filename): os.remove(temp_filename)
+        await file.close()
 
 # --- USER MANAGEMENT ---
 
