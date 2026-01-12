@@ -39,7 +39,14 @@ jobs:
       - name: Install XcodeProj Gem
         run: sudo gem install xcodeproj
 
-      # 2. INIEZIONE CONFIGURAZIONE FIREBASE
+      # [NUOVO] 2. INIEZIONE OPZIONI DART (Fix errore main.dart)
+      # Ricrea i file ignorati lib/firebase_options_*.dart
+      - name: Inject Firebase Dart Options
+        run: |
+          echo "${{ secrets.FIREBASE_OPTIONS_DEV }}" | base64 --decode > lib/firebase_options_dev.dart
+          echo "${{ secrets.FIREBASE_OPTIONS_PROD }}" | base64 --decode > lib/firebase_options_prod.dart
+
+      # 3. INIEZIONE CONFIGURAZIONE IOS (GoogleService-Info.plist)
       - name: Inject GoogleService-Info.plist
         run: |
           BUILD_ENV="${{ inputs.environment }}"
@@ -53,8 +60,7 @@ jobs:
              echo "${{ secrets.IOS_FIREBASE_CONFIG_DEV }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
           fi
 
-      # 3. SUPER PATCHING (RUBY): Forza Manual Signing e Rimuove Team ID
-      # Questo script riscrive il file project.pbxproj in modo pulito
+      # 4. SUPER PATCHING (RUBY): Forza Manual Signing e Rimuove Team ID
       - name: Force Manual Signing (Ruby Script)
         run: |
           ruby -e '
@@ -62,7 +68,6 @@ jobs:
             path = "ios/Runner.xcodeproj"
             project = Xcodeproj::Project.open(path)
             
-            # Cerca il target "Runner" e rimuove ogni traccia di firma automatica
             project.targets.each do |target|
               if target.name == "Runner"
                 puts "Patching Runner target..."
@@ -80,8 +85,7 @@ jobs:
             puts "✅ Project patched successfully!"
           '
 
-      # 4. BUILD IOS (Standard)
-      # Ora che il progetto è patchato, possiamo lanciare il comando standard
+      # 5. BUILD IOS (Standard)
       - name: Build iOS App Bundle
         run: |
           BUILD_ENV="${{ inputs.environment }}"
@@ -90,14 +94,14 @@ jobs:
           echo "Building for environment: $BUILD_ENV"
           flutter build ios --release --no-codesign --dart-define=ENV=$BUILD_ENV
 
-      # 5. PACKAGE IPA
+      # 6. PACKAGE IPA
       - name: Package IPA for Sideloadly
         run: |
           mkdir -p Payload
           mv build/ios/iphoneos/Runner.app Payload/
           zip -r kybo_${{ inputs.environment || 'dev' }}.ipa Payload
 
-      # 6. UPLOAD
+      # 7. UPLOAD
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
