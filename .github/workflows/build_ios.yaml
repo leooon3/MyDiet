@@ -39,13 +39,39 @@ jobs:
       - name: Install XcodeProj Gem
         run: sudo gem install xcodeproj
 
-      # [NUOVO] 2. INIEZIONE OPZIONI DART (Fix errore main.dart)
-      # Ricrea i file ignorati lib/firebase_options_*.dart
-      - name: Inject Firebase Dart Options
+      # [DEBUG & FIX] 2. INIEZIONE FILE SEGRETI CON CHECK
+      - name: Inject Secret Files (Debug)
         run: |
+          echo "--- 🔍 CHECK PRELIMINARE ---"
+          # Verifica se i secret esistono (senza stamparli)
+          if [ -n "${{ secrets.ENV_FILE }}" ]; then echo "✅ Secret ENV_FILE: TROVATO"; else echo "❌ Secret ENV_FILE: MANCANTE o VUOTO"; fi
+          if [ -n "${{ secrets.ENV_PROD_FILE }}" ]; then echo "✅ Secret ENV_PROD_FILE: TROVATO"; else echo "❌ Secret ENV_PROD_FILE: MANCANTE (Userò un file vuoto)"; fi
+
+          echo "--- 🛠️ CREAZIONE FILE ---"
+          # Creiamo PRIMA i file vuoti per garantire che esistano sempre
+          touch .env
+          touch .env.prod
+
+          # Se il secret esiste, ci scriviamo dentro
+          if [ -n "${{ secrets.ENV_FILE }}" ]; then
+             echo "${{ secrets.ENV_FILE }}" | base64 --decode > .env
+          else
+             # FALLBACK: Scriviamo una variabile dummy per non far fallire il build
+             echo "FLAVOR=dev_dummy" > .env
+          fi
+
+          if [ -n "${{ secrets.ENV_PROD_FILE }}" ]; then
+             echo "${{ secrets.ENV_PROD_FILE }}" | base64 --decode > .env.prod
+          fi
+
+          echo "--- 📂 VERIFICA FINALE ---"
+          ls -la .env .env.prod
+          echo "Contenuto .env (prime righe):"
+          head -n 2 .env
+
+          # Iniezione Opzioni Dart
           echo "${{ secrets.FIREBASE_OPTIONS_DEV }}" | base64 --decode > lib/firebase_options_dev.dart
           echo "${{ secrets.FIREBASE_OPTIONS_PROD }}" | base64 --decode > lib/firebase_options_prod.dart
-
       # 3. INIEZIONE CONFIGURAZIONE IOS (GoogleService-Info.plist)
       - name: Inject GoogleService-Info.plist
         run: |
