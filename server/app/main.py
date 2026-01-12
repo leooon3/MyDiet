@@ -295,8 +295,13 @@ async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_f
 # --- USER MANAGEMENT ---
 
 @app.post("/admin/create-user")
-async def admin_create_user(body: CreateUserRequest, requester: dict = Depends(verify_admin)):
+async def admin_create_user(body: CreateUserRequest, requester: dict = Depends(verify_professional)): # [1] Permesso allargato
     try:
+        # [2] Logica per Nutrizionista: Forza ruolo e parent_id
+        if requester['role'] == 'nutritionist':
+            body.role = 'user' # Il nutrizionista crea solo utenti semplici
+            body.parent_id = requester['uid'] # L'utente è vincolato a chi lo crea
+            
         db = firebase_admin.firestore.client()
         existing_docs = db.collection('users').where('email', '==', body.email).stream()
         for doc in existing_docs: doc.reference.delete()
