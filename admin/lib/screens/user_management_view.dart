@@ -582,8 +582,8 @@ class _UserManagementViewState extends State<UserManagementView> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(
-                  0.05,
+                color: Colors.black.withValues(
+                  alpha: 0.05,
                 ), // Nota: .withValues su Flutter 3.27+, withOpacity su precedenti
                 blurRadius: 10,
               ),

@@ -1,114 +1,72 @@
-name: Build iOS Unsigned
+name: Build iOS for Sideloadly
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Seleziona Ambiente (Flavor)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - prod
 
 jobs:
-  build_ios:
+  build_ios_unsigned:
+    name: Build iOS (${{ inputs.environment }})
     runs-on: macos-latest
+
     defaults:
       run:
-        working-directory: ./Kybo
+        working-directory: ./client
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "zulu"
-          java-version: "17"
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.3"
-          bundler-cache: true
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      # 1. Setup Flutter
+      - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
+          flutter-version: "3.38.5" # O la tua versione
           cache: true
 
-      # 1. Inject Secret (If missing, app will crash, but build continues)
-      - name: Create GoogleService-Info.plist
-        env:
-          GOOGLE_SERVICE_INFO: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}
-        run: |
-          if [ -z "$GOOGLE_SERVICE_INFO" ]; then
-            echo "::error::Secret IOS_GOOGLE_SERVICE_INFO_PLIST is MISSING. Using dummy (App will crash)."
-            cat <<EOF > ios/Runner/GoogleService-Info.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict><key>API_KEY</key><string>dummy</string><key>PROJECT_ID</key><string>dummy</string><key>GOOGLE_APP_ID</key><string>1:123:ios:abc</string></dict>
-          </plist>
-          EOF
-          else
-            echo "$GOOGLE_SERVICE_INFO" > ios/Runner/GoogleService-Info.plist
-          fi
-
+      # 2. Install Dependencies
       - name: Install Dependencies
         run: flutter pub get
 
-      # 2. RUN POD INSTALL FIRST (Before patching)
-      # This generates the Xcode workspace. We must do this before hacking the project file.
-      - name: Update Pods
+      # 3. INIEZIONE CONFIGURAZIONE FIREBASE (Fix Crash)
+      # Sceglie il segreto in base all'input 'environment'
+      - name: Inject GoogleService-Info.plist
         run: |
-          cd ios
-          rm -f Podfile.lock
-          sed -i '' "s/^#* *platform :ios.*/platform :ios, '14.0'/" Podfile
-          pod install --repo-update
-          cd ..
+          if [[ "${{ inputs.environment }}" == "prod" ]]; then
+             echo "🚀 Building for PROD - Using Prod Config"
+             echo "${{ secrets.IOS_FIREBASE_CONFIG_PROD }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          else
+             echo "🛠️ Building for DEV - Using Dev Config"
+             echo "${{ secrets.IOS_FIREBASE_CONFIG_DEV }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          fi
 
-      # 3. NUCLEAR PATCHING (Runs LAST to overwrite Pods changes)
-      - name: Force Disable Signing (Ruby)
+      # 4. BUILD IOS (No Codesign)
+      # Compiliamo in release mode ma senza firma (ci pensa Sideloadly)
+      # Passiamo anche le variabili d'ambiente per il codice Dart (es. Env.apiUrl)
+      - name: Build iOS App Bundle
         run: |
-          ruby -e '
-            path = "ios/Runner.xcodeproj/project.pbxproj"
-            content = File.read(path)
+          flutter build ios --release --no-codesign --dart-define=ENV=${{ inputs.environment }}
 
-            puts "Patching project file..."
-
-            # 1. Force Manual Signing
-            content.gsub!(/CODE_SIGN_STYLE\s*=\s*"?Automatic"?;/, "CODE_SIGN_STYLE = Manual;")
-
-            # 2. Remove Team & Profile
-            content.gsub!(/DEVELOPMENT_TEAM\s*=\s*[^;]*;/, "DEVELOPMENT_TEAM = \"\";")
-            content.gsub!(/PROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]*;/, "PROVISIONING_PROFILE_SPECIFIER = \"\";")
-
-            # 3. Remove Identity
-            content.gsub!(/CODE_SIGN_IDENTITY\s*=\s*[^;]*;/, "CODE_SIGN_IDENTITY = \"\";")
-            content.gsub!(/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]"\s*=\s*[^;]*;/, "\"CODE_SIGN_IDENTITY[sdk=iphoneos*]\" = \"\";")
-
-            # 4. INJECT Build Settings (The Final Override)
-            # This forces CODE_SIGNING_ALLOWED = NO into every build configuration block found
-            content.gsub!(/buildSettings\s*=\s*\{/, "buildSettings = { CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CODE_SIGN_IDENTITY = \"\";")
-
-            File.write(path, content)
-            puts "Successfully patched project.pbxproj with forced settings."
-          '
-
-      # 4. Build with Command-Line Overrides
-      - name: Build iOS App
+      # 5. CREAZIONE IPA MANUALE
+      # Flutter crea un .app, ma Sideloadly vuole un .ipa.
+      # Un .ipa è solo una cartella "Payload" zippata.
+      - name: Package IPA for Sideloadly
         run: |
-          flutter build ios --release --no-codesign --no-pub -- \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_STYLE=Manual
-
-      - name: Create IPA Payload
-        run: |
-          mkdir -p Payload
+          mkdir Payload
           mv build/ios/iphoneos/Runner.app Payload/
-          zip -r Kybo_Unsigned.ipa Payload
+          zip -r kybo_${{ inputs.environment }}.ipa Payload
 
+      # 6. UPLOAD ARTIFACT
+      # Scaricherai questo file da GitHub per darlo a Sideloadly
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Kybo-IPA
-          path: Kybo/Kybo_Unsigned.ipa
+          name: kybo-ios-${{ inputs.environment }}
+          path: client/kybo_${{ inputs.environment }}.ipa

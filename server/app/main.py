@@ -383,29 +383,68 @@ async def admin_unassign_user(body: UnassignUserRequest, requester: dict = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Incolla/Sostituisci in server/app/main.py
+
+def _delete_collection_documents(coll_ref, batch_size=50):
+    """Helper per cancellare documenti in batch"""
+    docs = coll_ref.limit(batch_size).stream()
+    deleted = 0
+    for doc in docs:
+        # Se ci sono sottocollezioni annidiate (es. dentro history), andrebbero gestite qui.
+        # Per la struttura attuale di Kybo (profondità 1), basta delete().
+        doc.reference.delete()
+        deleted += 1
+    
+    if deleted >= batch_size:
+        return _delete_collection_documents(coll_ref, batch_size)
+
 @app.delete("/admin/delete-user/{target_uid}")
 async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_professional)):
     requester_id = requester['uid']
     requester_role = requester['role']
+    
     try:
         db = firebase_admin.firestore.client()
+        user_ref = db.collection('users').document(target_uid)
+        
+        # 1. Verifica Permessi (Nutrizionista può cancellare solo i suoi)
         if requester_role == 'nutritionist':
-             user_doc = db.collection('users').document(target_uid).get()
+             user_doc = user_ref.get()
              if not user_doc.exists: return {"message": "User already deleted"}
              data = user_doc.to_dict()
              if data.get('parent_id') != requester_id and data.get('created_by') != requester_id:
                   raise HTTPException(status_code=403, detail="Cannot delete this user")
+
+        # 2. Log dell'azione
         db.collection('access_logs').add({
             'requester_id': requester_id, 'target_uid': target_uid,
-            'action': 'DELETE_USER', 'reason': 'Permanent Deletion',
+            'action': 'DELETE_USER_FULL', 'reason': 'GDPR Permanent Deletion',
             'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
         })
+
+        # 3. Cancellazione Dati Correlati (Top-Level Collections)
+        # Cancella storico diete globale collegato a questo utente
+        diet_history_query = db.collection('diet_history').where('userId', '==', target_uid)
+        _delete_collection_documents(diet_history_query)
+
+        # 4. Cancellazione Sottocollezioni Utente
+        # Firestore NON cancella le sottocollezioni automaticamente quando cancelli il padre.
+        subcollections = user_ref.collections()
+        for sub in subcollections:
+            _delete_collection_documents(sub)
+
+        # 5. Cancellazione Documento Utente
+        user_ref.delete()
+
+        # 6. Cancellazione Auth (Login)
         try: auth.delete_user(target_uid)
-        except: pass
-        db.collection('users').document(target_uid).delete()
-        return {"message": "Deleted"}
+        except: pass # Se l'utente Auth non esiste più, ignora.
+
+        return {"message": "User and all related data permanently deleted"}
+        
     except HTTPException as he: raise he
     except Exception as e:
+        logger.error("delete_user_critical_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/admin/delete-diet/{diet_id}")

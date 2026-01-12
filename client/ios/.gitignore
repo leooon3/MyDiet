@@ -32,3 +32,9 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+
+GoogleService-Info-DEV.plist
+GoogleService-Info-PROD.plist
+ios_config_dev_base64.txt
+ios_config_prod_base64.txt
