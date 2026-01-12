@@ -49,20 +49,30 @@ jobs:
              echo "${{ secrets.IOS_FIREBASE_CONFIG_DEV }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
           fi
 
-      # 4. BUILD IOS (No Codesign - Force Manual)
+      # 4a. PATCHING: Disabilita forzatamente la firma nel progetto Xcode
+      # Questo è necessario perché 'flutter build' non accetta parametri di firma diretti
+      - name: Disable Code Signing (Patch project.pbxproj)
+        run: |
+          cd ios/Runner.xcodeproj
+          # Usa sed per modificare le impostazioni di firma nel file di progetto
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' project.pbxproj
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' project.pbxproj
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g' project.pbxproj
+          cd ../..
+
+      # 4b. BUILD IOS (Clean)
+      # Ora possiamo lanciare la build normale, tanto il progetto è già "patchato"
       - name: Build iOS App Bundle
         run: |
-          # Impostiamo ENV a 'dev' se l'input è vuoto (es. trigger via push)
+          # Impostiamo ENV a 'dev' se l'input è vuoto
           BUILD_ENV="${{ inputs.environment }}"
           if [ -z "$BUILD_ENV" ]; then BUILD_ENV="dev"; fi
 
           echo "Building for environment: $BUILD_ENV"
 
-          flutter build ios --release --no-codesign --dart-define=ENV=$BUILD_ENV -- \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_STYLE=Manual
+          # Nota: Rimosso tutto ciò che c'era dopo '--'
+          flutter build ios --release --no-codesign --dart-define=ENV=$BUILD_ENV
 
       # 5. CREAZIONE IPA MANUALE
       # Flutter crea un .app, ma Sideloadly vuole un .ipa.
