@@ -40,10 +40,10 @@ class NotificationService {
 
       final DarwinInitializationSettings iosSettings =
           DarwinInitializationSettings(
-            requestAlertPermission: true,
-            requestBadgePermission: true,
-            requestSoundPermission: true,
-          );
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
 
       final InitializationSettings initSettings = InitializationSettings(
         android: androidSettings,
@@ -71,10 +71,9 @@ class NotificationService {
         sound: true,
       );
       if (Platform.isAndroid) {
-        final androidPlugin = _localNotifications
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
+        final androidPlugin =
+            _localNotifications.resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>();
         await androidPlugin?.requestNotificationsPermission();
         await androidPlugin?.requestExactAlarmsPermission();
       }
@@ -116,7 +115,7 @@ class NotificationService {
     }
   }
 
-  Future<void> scheduleDietNotifications(Map<String, dynamic> dietPlan) async {
+  Future<void> scheduleDietNotifications(dynamic dietPlan) async {
     // Attualmente usiamo gli orari preferiti dell'utente (Allarmi)
     // In futuro qui potrai usare 'dietPlan' per mettere il nome del piatto nella notifica
     await scheduleAllMeals();

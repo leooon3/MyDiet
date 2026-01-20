@@ -135,9 +135,8 @@ class MealCard extends StatelessWidget {
                           Text(
                             mealName.toUpperCase(),
                             style: TextStyle(
-                              color: allConsumed
-                                  ? Colors.grey
-                                  : AppColors.primary,
+                              color:
+                                  allConsumed ? Colors.grey : AppColors.primary,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                               letterSpacing: 1.2,
@@ -165,20 +164,19 @@ class MealCard extends StatelessWidget {
                       children: List.generate(foods.length, (index) {
                         final originalFood = foods[index];
                         final int cadCode = originalFood['cad_code'] ?? 0;
-                        final String? instanceId = originalFood['instance_id']
-                            ?.toString();
+                        final String? instanceId =
+                            originalFood['instance_id']?.toString();
 
                         // MODIFICA: Generazione chiave robusta allineata a DietLogic
                         final String swapKey =
                             (instanceId != null && instanceId.isNotEmpty)
-                            ? "$day::$mealName::$instanceId"
-                            : "$day::$mealName::$cadCode";
+                                ? "$day::$mealName::$instanceId"
+                                : "$day::$mealName::$cadCode";
 
                         // --- LOGICA SWAP ---
                         final bool isSwapped = activeSwaps.containsKey(swapKey);
-                        final activeSwap = isSwapped
-                            ? activeSwaps[swapKey]
-                            : null;
+                        final activeSwap =
+                            isSwapped ? activeSwaps[swapKey] : null;
 
                         // Se c'è uno swap, usiamo i suoi dati, altrimenti quelli originali
                         final String displayName = isSwapped
@@ -246,13 +244,13 @@ class MealCard extends StatelessWidget {
                                     isConsumed
                                         ? Icons.check
                                         : (isAvailable
-                                              ? Icons.check_circle
-                                              : Icons.circle_outlined),
+                                            ? Icons.check_circle
+                                            : Icons.circle_outlined),
                                     color: isConsumed
                                         ? Colors.grey[300]
                                         : (isAvailable
-                                              ? AppColors.primary
-                                              : Colors.grey[400]),
+                                            ? AppColors.primary
+                                            : Colors.grey[400]),
                                     size: 24,
                                   ),
                                 ),
@@ -288,10 +286,10 @@ class MealCard extends StatelessWidget {
                                                 color: isConsumed
                                                     ? Colors.grey
                                                     : (isSwapped
-                                                          ? Colors.deepOrange
-                                                          : const Color(
-                                                              0xFF2D3436,
-                                                            )),
+                                                        ? Colors.deepOrange
+                                                        : const Color(
+                                                            0xFF2D3436,
+                                                          )),
                                                 fontWeight: isSwapped
                                                     ? FontWeight.bold
                                                     : FontWeight.w600,
@@ -302,7 +300,6 @@ class MealCard extends StatelessWidget {
                                         ],
                                       ),
                                       const SizedBox(height: 4),
-
                                       if (hasIngredients)
                                         ...ingredients.map((ing) {
                                           String iName = ing['name'].toString();
@@ -337,8 +334,8 @@ class MealCard extends StatelessWidget {
                                             color: isConsumed
                                                 ? Colors.grey[400]
                                                 : (qtyDisplay == "A piacere"
-                                                      ? AppColors.primary
-                                                      : Colors.grey[600]),
+                                                    ? AppColors.primary
+                                                    : Colors.grey[600]),
                                             fontSize: 13,
                                             fontStyle: qtyDisplay == "A piacere"
                                                 ? FontStyle.italic

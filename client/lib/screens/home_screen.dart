@@ -245,7 +245,6 @@ class _MainScreenContentState extends State<MainScreenContent>
                 ),
               ),
               iconTheme: const IconThemeData(color: Colors.black),
-
               leading: Builder(
                 builder: (context) {
                   return Showcase(
@@ -260,7 +259,6 @@ class _MainScreenContentState extends State<MainScreenContent>
                   );
                 },
               ),
-
               actions: [
                 Showcase(
                   key: _tranquilKey,
@@ -279,7 +277,6 @@ class _MainScreenContentState extends State<MainScreenContent>
                   ),
                 ),
               ],
-
               bottom: TabBar(
                 controller: _tabController,
                 isScrollable: true,
@@ -294,10 +291,8 @@ class _MainScreenContentState extends State<MainScreenContent>
               ),
             )
           : null,
-
       drawer: _buildDrawer(context, user),
       body: _buildBody(provider),
-
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
           indicatorColor: AppColors.primary.withValues(alpha: 0.1),
@@ -334,12 +329,10 @@ class _MainScreenContentState extends State<MainScreenContent>
               ),
               label: 'Dispensa',
             ),
-
             const NavigationDestination(
               icon: Icon(Icons.calendar_today),
               label: 'Piano',
             ),
-
             NavigationDestination(
               icon: Showcase(
                 key: _shoppingTabKey,
@@ -365,15 +358,16 @@ class _MainScreenContentState extends State<MainScreenContent>
           onScanTap: () => _scanReceipt(provider),
         );
       case 1:
+        // [FIX] Passiamo dietPlan invece di dietData/substitutions
         return TabBarView(
           controller: _tabController,
           children: days.map((day) {
             return DietView(
               day: day,
-              dietData: provider.dietData,
+              dietPlan: provider.dietPlan, // <--- CAMBIATO QUI
               isLoading: provider.isLoading,
               activeSwaps: provider.activeSwaps,
-              substitutions: provider.substitutions,
+              // substitutions rimosso
               pantryItems: provider.pantryItems,
               isTranquilMode: provider.isTranquilMode,
             );
@@ -382,7 +376,8 @@ class _MainScreenContentState extends State<MainScreenContent>
       case 2:
         return ShoppingListView(
           shoppingList: provider.shoppingList,
-          dietData: provider.dietData,
+          dietPlan:
+              provider.dietPlan, // <--- PASSA L'OGGETTO (prima era dietData)
           activeSwaps: provider.activeSwaps,
           pantryItems: provider.pantryItems,
           onUpdateList: provider.updateShoppingList,
@@ -401,9 +396,9 @@ class _MainScreenContentState extends State<MainScreenContent>
     return StreamBuilder<DocumentSnapshot>(
       stream: user != null
           ? FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .snapshots()
+              .collection('users')
+              .doc(user.uid)
+              .snapshots()
           : const Stream.empty(),
       builder: (streamCtx, snapshot) {
         String role = 'user';
@@ -615,13 +610,13 @@ class _MainScreenContentState extends State<MainScreenContent>
         return StatefulBuilder(
           builder: (innerCtx, setDialogState) {
             void addAlarm() => setDialogState(
-              () => alarms.add({
-                'id': DateTime.now().millisecondsSinceEpoch % 100000,
-                'label': 'Spuntino',
-                'time': '10:00',
-                'body': 'Ricorda il tuo spuntino!',
-              }),
-            );
+                  () => alarms.add({
+                    'id': DateTime.now().millisecondsSinceEpoch % 100000,
+                    'label': 'Spuntino',
+                    'time': '10:00',
+                    'body': 'Ricorda il tuo spuntino!',
+                  }),
+                );
             void removeAlarm(int index) =>
                 setDialogState(() => alarms.removeAt(index));
 
@@ -695,8 +690,8 @@ class _MainScreenContentState extends State<MainScreenContent>
                                             isDense: true,
                                             contentPadding:
                                                 EdgeInsets.symmetric(
-                                                  vertical: 8,
-                                                ),
+                                              vertical: 8,
+                                            ),
                                           ),
                                           onChanged: (v) => alarm['label'] = v,
                                         ),

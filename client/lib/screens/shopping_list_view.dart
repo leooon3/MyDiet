@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kybo/models/diet_models.dart';
 import '../models/active_swap.dart';
 import '../models/pantry_item.dart';
 import '../constants.dart';
@@ -6,7 +7,7 @@ import '../logic/diet_calculator.dart';
 
 class ShoppingListView extends StatefulWidget {
   final List<String> shoppingList;
-  final Map<String, dynamic>? dietData;
+  final DietPlan? dietPlan; // <--- CAMBIATO: da Map a DietPlan
   final Map<String, ActiveSwap> activeSwaps;
   final List<PantryItem> pantryItems;
   final Function(List<String>) onUpdateList;
@@ -15,7 +16,7 @@ class ShoppingListView extends StatefulWidget {
   const ShoppingListView({
     super.key,
     required this.shoppingList,
-    required this.dietData,
+    required this.dietPlan, // <--- Aggiornato
     required this.activeSwaps,
     required this.pantryItems,
     required this.onUpdateList,
@@ -58,7 +59,7 @@ class _ShoppingListViewState extends State<ShoppingListView> {
   }
 
   void _showImportDialog() {
-    if (widget.dietData == null) {
+    if (widget.dietPlan == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Carica prima una dieta!")));
@@ -81,13 +82,12 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                   itemCount: orderedDays.length,
                   itemBuilder: (context, i) {
                     final day = orderedDays[i];
-                    final dayPlan =
-                        widget.dietData![day] as Map<String, dynamic>?;
+                    final dayPlan = widget.dietPlan!.plan[day];
                     if (dayPlan == null) return const SizedBox.shrink();
 
                     List<String> mealNames = dayPlan.keys.where((k) {
                       var foods = dayPlan[k];
-                      return foods is List && foods.isNotEmpty;
+                      return foods != null && foods.isNotEmpty;
                     }).toList();
 
                     mealNames.sort((a, b) {
@@ -100,9 +100,8 @@ class _ShoppingListViewState extends State<ShoppingListView> {
 
                     if (mealNames.isEmpty) return const SizedBox.shrink();
 
-                    final allDayKeys = mealNames
-                        .map((m) => "$day::$m")
-                        .toList();
+                    final allDayKeys =
+                        mealNames.map((m) => "$day::$m").toList();
                     bool areAllSelected = allDayKeys.every(
                       (k) => _selectedMealKeys.contains(k),
                     );
@@ -124,9 +123,8 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                       title: Text(
                         i == 0 ? "$day (Oggi)" : day,
                         style: TextStyle(
-                          fontWeight: i == 0
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                          fontWeight:
+                              i == 0 ? FontWeight.bold : FontWeight.normal,
                           color: i == 0 ? AppColors.primary : Colors.black87,
                         ),
                       ),
@@ -186,94 +184,51 @@ class _ShoppingListViewState extends State<ShoppingListView> {
 
     try {
       for (String key in _selectedMealKeys) {
-        // MODIFICA: Parsing sicuro con il nuovo separatore '::'
         var parts = key.split('::');
-        if (parts.length < 2) continue; // Skip chiavi malformate
+        if (parts.length < 2) continue;
 
         var day = parts[0];
-        // Il pasto è tutto ciò che sta tra il primo e l'ultimo elemento
-        // (nel caso in cui in futuro il nome pasto contenesse '::', ma è improbabile)
         var meal = parts[1];
 
-        List<dynamic>? foods = widget.dietData![day]?[meal];
+        // Accesso tipizzato: ottengo List<Dish>
+        List<Dish>? foods = widget.dietPlan!.plan[day]?[meal];
         if (foods == null) continue;
 
-        // --- Logica di Raggruppamento (Invariata) ---
-        List<List<dynamic>> groupedFoods = [];
-        List<dynamic> currentGroup = [];
+        // Iteriamo direttamente sui piatti (Dish)
+        for (var dish in foods) {
+          // 1. Controllo Consumato (usando la proprietà dell'oggetto)
+          if (dish.isConsumed) continue;
 
-        for (var food in foods) {
-          String qty = food['qty']?.toString() ?? "";
-          if (qty == "N/A") {
-            if (currentGroup.isNotEmpty) {
-              groupedFoods.add(List.from(currentGroup));
-            }
-            currentGroup = [food];
-          } else {
-            if (currentGroup.isNotEmpty) {
-              currentGroup.add(food);
-            } else {
-              groupedFoods.add([food]);
-            }
-          }
-        }
-        if (currentGroup.isNotEmpty) groupedFoods.add(List.from(currentGroup));
+          // 2. Generazione Chiave Swap
+          String swapKey = (dish.instanceId.isNotEmpty)
+              ? "$day::$meal::${dish.instanceId}"
+              : "$day::$meal::${dish.cadCode}";
 
-        // --- Processamento Gruppi con FIX SWAP KEY ---
-        for (int i = 0; i < groupedFoods.length; i++) {
-          var group = groupedFoods[i];
-
-          // --- MODIFICA PUNTO 2: CONTROLLO CONSUMATO ---
-          // Se anche solo un elemento del gruppo è consumato, saltiamo tutto il gruppo.
-          // Questo evita di aggiungere alla lista cose già mangiate.
-          bool isConsumed = group.any((f) => f['consumed'] == true);
-          if (isConsumed) continue;
-          // ---------------------------------------------
-
-          var firstItem = group.first;
-          String? instanceId = firstItem['instance_id']?.toString();
-          int cadCode = firstItem['cad_code'] ?? 0;
-
-          // MODIFICA: Generazione chiave robusta
-          String swapKey;
-          if (instanceId != null && instanceId.isNotEmpty) {
-            swapKey = "$day::$meal::$instanceId";
-          } else {
-            swapKey = "$day::$meal::$cadCode";
-          }
-          // [FIX END] Ora la chiave corrisponde a quella usata in ActiveSwaps
-
-          List<dynamic> itemsToAdd = group;
-
+          // 3. Determina cosa aggiungere (Swap o Originale)
           if (widget.activeSwaps.containsKey(swapKey)) {
-            // Trovato swap attivo! Uso gli ingredienti sostitutivi.
+            // Logica Swap
             final swap = widget.activeSwaps[swapKey]!;
             if (swap.swappedIngredients != null &&
                 swap.swappedIngredients!.isNotEmpty) {
-              itemsToAdd = swap.swappedIngredients!;
-            } else {
-              itemsToAdd = [
-                {'name': swap.name, 'qty': swap.qty, 'unit': swap.unit},
-              ];
-            }
-          }
-
-          for (var food in itemsToAdd) {
-            if (food['ingredients'] != null &&
-                (food['ingredients'] as List).isNotEmpty) {
-              for (var ing in food['ingredients']) {
+              for (var ing in swap.swappedIngredients!) {
+                // Nota: activeSwap usa ancora mappe dinamiche per flessibilità interna
                 _addToAggregator(
-                  neededItems,
-                  ing['name']?.toString() ?? "",
-                  ing['qty']?.toString() ?? "",
-                );
+                    neededItems, ing['name'].toString(), ing['qty'].toString());
               }
             } else {
-              String qtyStr = food['qty']?.toString() ?? "";
-              // Salta i "N/A" se sono placeholder di gruppo
-              if (qtyStr == "N/A" && itemsToAdd.length > 1) continue;
+              _addToAggregator(
+                  neededItems, swap.name, "${swap.qty} ${swap.unit}");
+            }
+          } else {
+            // Logica Piatto Originale
+            if (dish.qty == "N/A") continue; // Skip header
 
-              _addToAggregator(neededItems, food['name'], qtyStr);
+            if (dish.isComposed) {
+              for (var ing in dish.ingredients) {
+                _addToAggregator(neededItems, ing.name, ing.qty);
+              }
+            } else {
+              _addToAggregator(neededItems, dish.name, dish.qty);
             }
           }
         }
@@ -544,9 +499,8 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                                 var list = List<String>.from(
                                   widget.shoppingList,
                                 );
-                                list[index] = val == true
-                                    ? "OK_$display"
-                                    : display;
+                                list[index] =
+                                    val == true ? "OK_$display" : display;
                                 widget.onUpdateList(list);
                               },
                             ),
@@ -565,9 +519,8 @@ class _ShoppingListViewState extends State<ShoppingListView> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: hasCheckedItems
-                            ? AppColors.primary
-                            : Colors.grey,
+                        backgroundColor:
+                            hasCheckedItems ? AppColors.primary : Colors.grey,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       onPressed: hasCheckedItems ? _moveCheckedToPantry : null,

@@ -14,6 +14,7 @@ import '../core/error_handler.dart';
 import '../logic/diet_calculator.dart';
 import 'package:permission_handler/permission_handler.dart'; // <--- NUOVO
 import '../services/notification_service.dart'; // <--- NUOVO (se non c'è già)
+import '../models/diet_models.dart';
 
 class DietProvider extends ChangeNotifier {
   final DietRepository _repository;
@@ -21,8 +22,8 @@ class DietProvider extends ChangeNotifier {
   final FirestoreService _firestore = FirestoreService();
   final AuthService _auth = AuthService();
 
-  Map<String, dynamic>? _dietData;
-  Map<String, dynamic>? _substitutions;
+  DietPlan?
+      _dietPlan; // Oggetto unico che contiene sia il piano che le sostituzioni
   List<PantryItem> _pantryItems = [];
   Map<String, ActiveSwap> _activeSwaps = {};
   List<String> _shoppingList = [];
@@ -52,63 +53,88 @@ class DietProvider extends ChangeNotifier {
   // [NUOVO] Logica di Sync Intelligente
   Future<String> runSmartSyncCheck({bool forceSync = false}) async {
     final user = _auth.currentUser;
-    if (user == null || _dietData == null) return "Errore: Dati mancanti.";
+    if (user == null || _dietPlan == null) return "Errore: Dati mancanti.";
+
+    // Serializziamo per il confronto
+    final currentPlanJson = _dietPlan!.toJson()['plan'];
+    final currentSubsJson = _dietPlan!.toJson()['substitutions'];
 
     bool hasSwapsChanged = _activeSwaps.isNotEmpty;
-    bool hasChanges =
-        _hasStructuralChanges(_dietData, _lastSyncedDiet) || hasSwapsChanged;
+    // Confrontiamo il JSON corrente con l'ultimo syncato
+    bool hasStructuralChanges =
+        _hasStructuralChanges(currentPlanJson, _lastSyncedDiet) ||
+            hasSwapsChanged;
 
-    if (!hasChanges && !forceSync) return "✅ Nessuna modifica.";
+    if (!hasStructuralChanges && !forceSync) return "✅ Nessuna modifica.";
 
     final now = DateTime.now();
-    if (!forceSync && now.difference(_lastCloudSave).inHours < 3) {
-      // Se è passato poco tempo, aggiorniamo SOLO 'current' (sync veloce)
-      final Map<String, dynamic> swapsToSave = {};
-      _activeSwaps.forEach((k, v) => swapsToSave[k] = v.toMap());
 
-      await _firestore.saveCurrentDiet(
-          _sanitize(_dietData!), _sanitize(_substitutions ?? {}), swapsToSave);
-      return "☁️ Modifiche sincronizzate.";
-    }
-
-    // Se è passato tempo (3h), creiamo ANCHE un punto nello storico
+    // Preparazione Swap
     final Map<String, dynamic> swapsToSave = {};
     _activeSwaps.forEach((k, v) => swapsToSave[k] = v.toMap());
 
-    try {
-      // 1. Aggiorna Current (Sempre)
+    // Sync Veloce (se < 3 ore)
+    if (!forceSync && now.difference(_lastCloudSave).inHours < 3) {
       await _firestore.saveCurrentDiet(
-          _sanitize(_dietData!), _sanitize(_substitutions ?? {}), swapsToSave);
+          _sanitize(currentPlanJson), _sanitize(currentSubsJson), swapsToSave);
+      return "☁️ Modifiche sincronizzate.";
+    }
 
-      // 2. Crea voce Storico (Checkpoint)
+    // Backup Storico (> 3 ore o force)
+    try {
+      // 1. Aggiorna Current
+      await _firestore.saveCurrentDiet(
+          _sanitize(currentPlanJson), _sanitize(currentSubsJson), swapsToSave);
+
+      // 2. Crea voce Storico
       if (_currentFirestoreId == null) {
         String newId = await _firestore.saveDietToHistory(
-          _sanitize(_dietData!),
-          _sanitize(_substitutions ?? {}),
+          _sanitize(currentPlanJson),
+          _sanitize(currentSubsJson),
           swapsToSave,
         );
         _currentFirestoreId = newId;
       } else {
-        // Se stiamo lavorando su una dieta specifica dello storico, aggiorniamo quella
         await _firestore.updateDietHistory(
           _currentFirestoreId!,
-          _sanitize(_dietData!),
-          _sanitize(_substitutions ?? {}),
+          _sanitize(currentPlanJson),
+          _sanitize(currentSubsJson),
           swapsToSave,
         );
       }
 
       _lastCloudSave = now;
-      _lastSyncedDiet = _deepCopy(_dietData);
+      _lastSyncedDiet = _deepCopy(currentPlanJson); // Aggiorniamo baseline
       return "✅ Backup Storico e Sync completati.";
     } catch (e) {
       return "❌ Errore Sync: $e";
     }
   }
 
+  // Helper privato per triggerare il sync dopo update manuali
+  void _triggerSmartSyncCheck() {
+    if (_auth.currentUser != null) {
+      bool timePassed =
+          DateTime.now().difference(_lastCloudSave) > _cloudSaveInterval;
+
+      final currentPlanJson = _dietPlan!.toJson()['plan'];
+      final currentSubsJson = _dietPlan!.toJson()['substitutions'];
+
+      bool isStructurallyDifferent = _hasStructuralChanges(
+              currentPlanJson, _lastSyncedDiet) ||
+          jsonEncode(currentSubsJson) != jsonEncode(_lastSyncedSubstitutions);
+
+      if (timePassed && isStructurallyDifferent) {
+        runSmartSyncCheck(
+            forceSync: true); // Riutilizziamo la logica principale
+        debugPrint("☁️ Auto-Sync attivato da modifica manuale");
+      }
+    }
+  }
+
   // Getters
-  Map<String, dynamic>? get dietData => _dietData;
-  Map<String, dynamic>? get substitutions => _substitutions;
+// Espone direttamente l'oggetto strutturato
+  DietPlan? get dietPlan => _dietPlan;
   String? _currentFirestoreId;
   List<PantryItem> get pantryItems => _pantryItems;
   Map<String, ActiveSwap> get activeSwaps => _activeSwaps;
@@ -133,11 +159,13 @@ class DietProvider extends ChangeNotifier {
       _conversions = await _storage.loadConversions();
 
       if (savedDiet != null && savedDiet['plan'] != null) {
-        _dietData = savedDiet['plan'];
-        _substitutions = savedDiet['substitutions'];
-        // Inizializza lo stato di sync
-        _lastSyncedDiet = _deepCopy(_dietData);
-        _lastSyncedSubstitutions = _deepCopy(_substitutions);
+        // Conversione da JSON cache a Oggetto Dart
+        _dietPlan = DietPlan.fromJson(savedDiet);
+
+        // Setup Sync
+        _lastSyncedDiet = _deepCopy(savedDiet['plan']);
+        _lastSyncedSubstitutions = _deepCopy(savedDiet['substitutions']);
+
         _recalcAvailability();
         hasData = true;
       }
@@ -152,36 +180,30 @@ class DietProvider extends ChangeNotifier {
 
   Future<void> syncFromFirebase(String uid) async {
     try {
-      // MODIFICA: Leggiamo da 'diets/current' invece che cercare l'ultimo in 'history'
       final docSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
-          .collection('diets') // Corretto: ora corrisponde a FirestoreService
-          .doc('current') // Corretto: puntiamo al file unico
+          .collection('diets')
+          .doc('current')
           .get();
 
       if (docSnapshot.exists) {
         final data = docSnapshot.data();
         if (data != null && data['plan'] != null) {
-          // Qui dovremmo implementare la logica di Merge Intelligente
-          // per non sovrascrivere i 'consumed' locali se il cloud è più vecchio o uguale.
-          // Per ora, carichiamo i dati strutturali.
+          // [FIX] Conversione diretta da Mappa Firestore a Oggetto DietPlan
+          _dietPlan = DietPlan.fromJson(data);
 
-          _dietData = data['plan'];
-          _substitutions = data['substitutions'];
-
-          await _storage.saveDiet({
-            'plan': _dietData,
-            'substitutions': _substitutions,
-          });
+          // Salvataggio cache locale
+          await _storage.saveDiet(_dietPlan!.toJson());
 
           // Aggiorna baseline sync
-          _lastSyncedDiet = _deepCopy(_dietData);
-          _lastSyncedSubstitutions = _deepCopy(_substitutions);
+          // Nota: toJson() ci dà la mappa completa {'plan': ..., 'substitutions': ...}
+          final jsonMap = _dietPlan!.toJson();
+          _lastSyncedDiet = _deepCopy(jsonMap['plan']);
+          _lastSyncedSubstitutions = _deepCopy(jsonMap['substitutions']);
           _lastCloudSave = DateTime.now();
 
           _recalcAvailability();
-
           await _scheduleMealNotifications();
           notifyListeners();
           debugPrint("☁️ Sync Cloud completato (da 'current')");
@@ -195,21 +217,17 @@ class DietProvider extends ChangeNotifier {
   void loadHistoricalDiet(Map<String, dynamic> dietData, String docId) {
     debugPrint("📂 Caricamento dieta ID: $docId");
 
-    _dietData = dietData['plan'];
-    _substitutions = dietData['substitutions'];
+    // [FIX] Ricostruiamo l'oggetto dai dati passati
+    _dietPlan = DietPlan.fromJson(dietData);
     _currentFirestoreId = docId;
 
-    // [CORREZIONE] Ripristino usando la tua classe ActiveSwap
     _activeSwaps = {};
 
     if (dietData['activeSwaps'] != null) {
       try {
         final rawSwaps = dietData['activeSwaps'] as Map;
-
         rawSwaps.forEach((key, value) {
           if (value is Map) {
-            // Qui ricostruiamo l'oggetto usando i tuoi campi (name, qty, unit)
-            // La chiave (es. "Lunedi_Pranzo_0") ci dice dove posizionarlo
             final swapObj =
                 ActiveSwap.fromMap(Map<String, dynamic>.from(value));
             _activeSwaps[key.toString()] = swapObj;
@@ -221,11 +239,13 @@ class DietProvider extends ChangeNotifier {
       }
     }
 
-    // Persistenza Locale e UI
-    _storage.saveDiet({'plan': _dietData, 'substitutions': _substitutions});
+    // Persistenza
+    _storage.saveDiet(_dietPlan!.toJson());
     _storage.saveSwaps(_activeSwaps);
 
-    _lastSyncedDiet = _deepCopy(_dietData);
+    final jsonMap = _dietPlan!.toJson();
+    _lastSyncedDiet = _deepCopy(jsonMap['plan']);
+
     _recalcAvailability();
     notifyListeners();
   }
@@ -239,84 +259,65 @@ class DietProvider extends ChangeNotifier {
   void updateDietMeal(
     String day,
     String meal,
-    int unsafeIndex, // Rinominiamo per chiarezza: è un indice "insicuro"
+    int unsafeIndex,
     String name,
     String qty, {
-    String? instanceId, // NUOVO: Identificativo univoco
-    int? cadCode, // NUOVO: Identificativo legacy
+    String? instanceId,
+    int? cadCode,
   }) async {
-    if (_dietData != null &&
-        _dietData![day] != null &&
-        _dietData![day][meal] != null) {
-      var currentMeals = List<dynamic>.from(_dietData![day][meal]);
+    // Check di sicurezza sui dati
+    if (_dietPlan == null ||
+        !_dietPlan!.plan.containsKey(day) ||
+        !_dietPlan!.plan[day]!.containsKey(meal)) {
+      return;
+    }
 
-      // [FIX STABILITÀ] Cerchiamo l'indice reale basandoci sugli ID
-      int realIndex = unsafeIndex;
+    final List<Dish> currentMeals = _dietPlan!.plan[day]![meal]!;
 
-      if (instanceId != null || cadCode != null) {
-        final foundIndex = currentMeals.indexWhere((m) {
-          final mId = m['instance_id']?.toString();
-          final mCode = m['cad_code'];
-          // Controllo robusto: Priorità a instanceId, fallback a cadCode
-          if (instanceId != null && mId == instanceId) return true;
-          if (cadCode != null && mCode == cadCode) return true;
-          return false;
-        });
+    // 1. Trova l'indice reale (usando instanceId per precisione)
+    int realIndex = unsafeIndex;
+    if (instanceId != null || cadCode != null) {
+      final foundIndex = currentMeals.indexWhere((d) {
+        if (instanceId != null && d.instanceId == instanceId) return true;
+        if (cadCode != null && d.cadCode == cadCode) return true;
+        return false;
+      });
 
-        if (foundIndex != -1) {
-          realIndex = foundIndex;
-        } else {
-          debugPrint(
-            "⚠️ Update annullato: Piatto non trovato (Sync mismatch?)",
-          );
-          return; // Ci fermiamo per evitare corruzione dati
-        }
-      }
-
-      // Procedi solo se l'indice è valido
-      if (realIndex >= 0 && realIndex < currentMeals.length) {
-        var oldItem = currentMeals[realIndex];
-        currentMeals[realIndex] = {...oldItem, 'name': name, 'qty': qty};
-        _dietData![day][meal] = currentMeals;
-
-        // Salvataggio locale
-        _storage.saveDiet({'plan': _dietData, 'substitutions': _substitutions});
-
-        // Logica Sync Intelligente (Invariata)
-        if (_auth.currentUser != null) {
-          bool timePassed =
-              DateTime.now().difference(_lastCloudSave) > _cloudSaveInterval;
-          bool isStructurallyDifferent =
-              _hasStructuralChanges(_dietData, _lastSyncedDiet) ||
-                  jsonEncode(_substitutions) !=
-                      jsonEncode(_lastSyncedSubstitutions);
-
-          if (timePassed && isStructurallyDifferent) {
-            // 1. Convertiamo gli swap attivi in mappa
-            final Map<String, dynamic> currentSwaps = {};
-            _activeSwaps.forEach((key, value) {
-              currentSwaps[key] = value.toMap();
-            });
-
-// 2. Salviamo tutto
-            await _firestore.saveDietToHistory(
-              _sanitize(_dietData!),
-              _sanitize(_substitutions ?? {}),
-              currentSwaps, // <--- TERZO ARGOMENTO: Passiamo gli swap attivi
-            );
-            _lastCloudSave = DateTime.now();
-            _lastSyncedDiet = _deepCopy(_dietData);
-            _lastSyncedSubstitutions = _deepCopy(_substitutions);
-            debugPrint("☁️ Cloud Sync Eseguito (Modifiche rilevate)");
-          }
-        }
-
-        _recalcAvailability();
-        notifyListeners();
+      if (foundIndex != -1) {
+        realIndex = foundIndex;
+      } else {
+        debugPrint("⚠️ Update annullato: Piatto non trovato.");
+        return;
       }
     }
-  }
 
+    if (realIndex >= 0 && realIndex < currentMeals.length) {
+      // 2. Crea un NUOVO oggetto Dish con i dati aggiornati (Dish è immutabile)
+      final oldDish = currentMeals[realIndex];
+
+      final newDish = Dish(
+        instanceId: oldDish.instanceId,
+        name: name, // Aggiornato
+        qty: qty, // Aggiornato
+        cadCode: oldDish.cadCode,
+        isComposed: oldDish.isComposed,
+        ingredients: oldDish.ingredients,
+        isConsumed: oldDish.isConsumed,
+      );
+
+      // 3. Sostituisci nella lista
+      currentMeals[realIndex] = newDish;
+
+      // 4. Salva (Serializzando l'oggetto)
+      await _storage.saveDiet(_dietPlan!.toJson());
+
+      // 5. Trigger Sync Intelligente
+      _triggerSmartSyncCheck();
+
+      _recalcAvailability();
+      notifyListeners();
+    }
+  }
   // [REFACTORING 4.1] Logica delegata a DietLogic
 
   Future<void> consumeMeal(
@@ -327,18 +328,19 @@ class DietProvider extends ChangeNotifier {
     String? instanceId,
     int? cadCode,
   }) async {
-    if (_dietData == null || _dietData![day] == null) return;
-    final meals = _dietData![day][mealType];
-    if (meals == null || meals is! List) return;
+    if (_dietPlan == null) return;
+
+    final mealsMap = _dietPlan!.plan[day];
+    if (mealsMap == null || !mealsMap.containsKey(mealType)) return;
+
+    final List<Dish> meals = mealsMap[mealType]!;
 
     // 1. Risoluzione Indice
     int realIndex = unsafeIndex;
     if (instanceId != null || cadCode != null) {
-      final foundIndex = meals.indexWhere((m) {
-        final mId = m['instance_id']?.toString();
-        final mCode = m['cad_code'];
-        if (instanceId != null && mId == instanceId) return true;
-        if (cadCode != null && mCode == cadCode) return true;
+      final foundIndex = meals.indexWhere((d) {
+        if (instanceId != null && d.instanceId == instanceId) return true;
+        if (cadCode != null && d.cadCode == cadCode) return true;
         return false;
       });
       if (foundIndex != -1) realIndex = foundIndex;
@@ -346,8 +348,11 @@ class DietProvider extends ChangeNotifier {
 
     if (realIndex >= meals.length) return;
 
-    // 2. Identificazione Gruppo (con Fallback di sicurezza)
-    List<List<int>> groups = DietCalculator.buildGroups(meals);
+    // 2. Identificazione Gruppo
+    // [IMPORTANTE] Convertiamo in JSON per DietCalculator.buildGroups che si aspetta Maps
+    final mealsAsMaps = meals.map((e) => e.toJson()).toList();
+    List<List<int>> groups = DietCalculator.buildGroups(mealsAsMaps);
+
     List<int> targetGroupIndices = [];
     for (int g = 0; g < groups.length; g++) {
       if (groups[g].contains(realIndex)) {
@@ -355,15 +360,14 @@ class DietProvider extends ChangeNotifier {
         break;
       }
     }
-    // FALLBACK: Se il gruppo fallisce, consumiamo almeno il piatto singolo
     if (targetGroupIndices.isEmpty) targetGroupIndices = [realIndex];
 
-    // 3. Preparazione Ingredienti
+    // 3. Preparazione Ingredienti (Usa il nuovo DietLogic che accetta Dish)
     List<Map<String, String>> allIngredientsToProcess = [];
     for (int i in targetGroupIndices) {
       var dish = meals[i];
       var ingredients = DietLogic.resolveIngredients(
-        dish: dish,
+        dish: dish, // Passiamo l'oggetto Dish
         day: day,
         mealType: mealType,
         activeSwaps: _activeSwaps,
@@ -371,7 +375,7 @@ class DietProvider extends ChangeNotifier {
       allIngredientsToProcess.addAll(ingredients);
     }
 
-    // 4. Validazione
+    // 4. Validazione e Consumo Dispensa (Logica invariata)
     if (!force) {
       for (var ing in allIngredientsToProcess) {
         DietLogic.validateItem(
@@ -383,7 +387,6 @@ class DietProvider extends ChangeNotifier {
       }
     }
 
-    // 5. Esecuzione Consumo Dispensa
     bool pantryModified = false;
     for (var ing in allIngredientsToProcess) {
       bool changed = DietLogic.consumeItem(
@@ -399,26 +402,28 @@ class DietProvider extends ChangeNotifier {
       _storage.savePantry(_pantryItems);
     }
 
-    // 6. MARCATURA CONSUMATO (Fix Robusto)
-    var currentMealsList = List<dynamic>.from(_dietData![day][mealType]);
+    // 5. MARCATURA CONSUMATO (Aggiorniamo la proprietà isConsumed)
     for (int i in targetGroupIndices) {
-      if (i < currentMealsList.length) {
-        var item = Map<String, dynamic>.from(currentMealsList[i]);
-        item['consumed'] = true; // Impostiamo esplicitamente true boolean
-        currentMealsList[i] = item;
-        debugPrint("✅ Piatto segnato consumato: ${item['name']}");
+      if (i < meals.length) {
+        final old = meals[i];
+        // Creiamo nuova istanza con isConsumed = true
+        meals[i] = Dish(
+          instanceId: old.instanceId,
+          name: old.name,
+          qty: old.qty,
+          cadCode: old.cadCode,
+          isComposed: old.isComposed,
+          ingredients: old.ingredients,
+          isConsumed: true, // <--- ECCO LA MODIFICA
+        );
       }
     }
 
-    _dietData![day][mealType] = currentMealsList;
-    _storage.saveDiet({'plan': _dietData, 'substitutions': _substitutions});
+    // 6. Salvataggio e Aggiornamento
+    await _storage.saveDiet(_dietPlan!.toJson());
 
-    // 7. SINCRONIZZAZIONE (Cruciale: await)
-    // Attendiamo che il calcolo dispensa finisca.
-    // _recalcAvailability ora aggiornerà anche la lista della spesa.
     await _recalcAvailability();
-
-    // Non serve notifyListeners() qui perché lo chiama _recalcAvailability
+    // Non serve notifyListeners() perché _recalcAvailability lo fa già
   }
 
   // Anche consumeSmart diventa un wrapper one-line
@@ -470,27 +475,24 @@ class DietProvider extends ChangeNotifier {
         token = await FirebaseMessaging.instance.getToken();
       } catch (_) {}
 
-      // 1. Upload al Server (Il server salva su Firestore 'current' e 'history')
+      // Il repository ora restituisce direttamente un oggetto DietPlan
       final result = await _repository.uploadDiet(path, fcmToken: token);
 
-      _dietData = result.plan;
-      _substitutions = result.substitutions;
+      _dietPlan = result;
 
-      // 2. Salvataggio Locale
-      await _storage.saveDiet({
-        'plan': _dietData,
-        'substitutions': _substitutions,
-      });
+      // Salvataggio Locale (Serializziamo l'oggetto in JSON)
+      await _storage.saveDiet(_dietPlan!.toJson());
 
-      // 3. Reset Stato Locale
+      // Reset Stato Locale
       _activeSwaps = {};
       await _storage.saveSwaps({});
 
       if (_auth.currentUser != null) {
         _lastCloudSave = DateTime.now();
-        _lastSyncedDiet = _deepCopy(_dietData);
-        _lastSyncedSubstitutions = _deepCopy(_substitutions);
-        // NON SALVIAMO SU FIRESTORE QUI: L'HA GIÀ FATTO IL SERVER!
+        // Usiamo il toJson() per creare le copie di backup
+        final jsonPlan = _dietPlan!.toJson();
+        _lastSyncedDiet = _deepCopy(jsonPlan['plan']);
+        _lastSyncedSubstitutions = _deepCopy(jsonPlan['substitutions']);
       }
 
       _recalcAvailability();
@@ -566,11 +568,14 @@ class DietProvider extends ChangeNotifier {
   }
 
   Future<void> _recalcAvailability() async {
-    if (_dietData == null) return;
+    if (_dietPlan == null) return;
 
-    // Preparazione Payload
+    // [FIX] Serializziamo il piano perché l'Isolate lavora con dati puri (JSON/Map)
+    // e non può accedere agli oggetti complessi del main isolate facilmente.
+    final planJson = _dietPlan!.toJson()['plan'];
+
     final payload = {
-      'dietData': _dietData,
+      'dietData': planJson,
       'pantryItems': _pantryItems
           .map((p) => {'name': p.name, 'quantity': p.quantity, 'unit': p.unit})
           .toList(),
@@ -585,13 +590,11 @@ class DietProvider extends ChangeNotifier {
     };
 
     try {
-      // Calcolo Disponibilità (Isolate)
       final newMap = await compute(
         DietCalculator.calculateAvailabilityIsolate,
         payload,
       );
       _availabilityMap = newMap;
-
       notifyListeners();
     } catch (e) {
       debugPrint("Isolate Calc Error: $e");
@@ -601,7 +604,7 @@ class DietProvider extends ChangeNotifier {
 
   // FIX 2.3: Generazione Lista Spesa Centralizzata (Swap Aware)
   List<String> generateSmartShoppingList() {
-    if (_dietData == null) return [];
+    if (_dietPlan == null) return [];
 
     final Map<String, double> totals = {};
     // Ordine Giorni Fisso
@@ -616,40 +619,28 @@ class DietProvider extends ChangeNotifier {
     ];
 
     for (var day in days) {
-      if (!_dietData!.containsKey(day)) continue;
-      final meals = _dietData![day];
-      if (meals is! Map) continue;
+      // Accesso sicuro alla mappa del piano
+      if (!_dietPlan!.plan.containsKey(day)) continue;
+      final meals = _dietPlan!.plan[day]!;
 
       meals.forEach((mealType, dishes) {
-        if (dishes is! List) return;
-
         for (int i = 0; i < dishes.length; i++) {
           var dish = dishes[i];
 
-          // CONTROLLO 1: È stato mangiato? (Logica robusta per SQLite/JSON)
-          var c = dish['consumed'];
-          bool isConsumed = c == true ||
-              c.toString().toLowerCase() == 'true' ||
-              c == 1 ||
-              c.toString() == '1';
-          if (isConsumed) continue;
+          // 1. Controllo Consumato (Ora è una proprietà tipizzata)
+          if (dish.isConsumed) continue;
 
-          // CONTROLLO 2: Ce l'ho già in dispensa?
-          // Usiamo la mappa di disponibilità calcolata. Se è true (Verde), non serve comprare.
+          // 2. Controllo Dispensa (Logica Availability Map)
           String availKey = "${day}_${mealType}_$i";
           if (_availabilityMap.containsKey(availKey) &&
               _availabilityMap[availKey] == true) {
             continue;
           }
 
-          // Se arrivo qui: Non l'ho mangiato E non ho gli ingredienti -> AGGIUNGI ALLA LISTA
-
-          // Logica Swap
-          final String? instanceId = dish['instance_id']?.toString();
-          final int cadCode = dish['cad_code'] ?? 0;
-          String swapKey = (instanceId != null && instanceId.isNotEmpty)
-              ? "${day}_${mealType}_$instanceId"
-              : "${day}_${mealType}_$cadCode";
+          // 3. Logica Swap (Usa instanceId o cadCode)
+          String swapKey = (dish.instanceId.isNotEmpty)
+              ? "${day}_${mealType}_${dish.instanceId}"
+              : "${day}_${mealType}_${dish.cadCode}";
 
           List<dynamic> itemsToProcess = [];
 
@@ -664,20 +655,25 @@ class DietProvider extends ChangeNotifier {
               ];
             }
           } else {
-            if (dish['qty'] == 'N/A') continue; // Header
-            if (dish['ingredients'] != null &&
-                (dish['ingredients'] as List).isNotEmpty) {
-              itemsToProcess = dish['ingredients'];
+            // Piatto Originale
+            if (dish.qty == 'N/A') continue; // Skip Headers
+
+            if (dish.isComposed) {
+              // Convertiamo gli ingredienti (oggetto) in mappa per processarli qui
+              itemsToProcess = dish.ingredients.map((e) => e.toJson()).toList();
             } else {
               itemsToProcess = [
-                {'name': dish['name'], 'qty': dish['qty']},
+                {'name': dish.name, 'qty': dish.qty},
               ];
             }
           }
 
+          // Aggregazione
           for (var item in itemsToProcess) {
             String name = item['name'].toString().trim();
-            if (name.toLowerCase().contains("libero")) continue;
+            if (name.toLowerCase().contains("libero")) {
+              continue; // Skip pasti liberi
+            }
             String entry = "$name (${item['qty']})";
             totals[entry] = (totals[entry] ?? 0) + 1;
           }
@@ -690,25 +686,20 @@ class DietProvider extends ChangeNotifier {
 
   List<String> _extractAllowedFoods() {
     final Set<String> foods = {};
-    if (_dietData != null) {
-      _dietData!.forEach((day, meals) {
-        if (meals is Map) {
-          meals.forEach((mealType, dishes) {
-            if (dishes is List) {
-              for (var d in dishes) {
-                foods.add(d['name']);
-              }
-            }
-          });
-        }
-      });
-    }
-    if (_substitutions != null) {
-      _substitutions!.forEach((key, group) {
-        if (group['options'] is List) {
-          for (var opt in group['options']) {
-            foods.add(opt['name']);
+    if (_dietPlan != null) {
+      // Iterazione Piano
+      _dietPlan!.plan.forEach((day, meals) {
+        meals.forEach((mealType, dishes) {
+          for (var d in dishes) {
+            foods.add(d.name);
           }
+        });
+      });
+
+      // Iterazione Sostituzioni
+      _dietPlan!.substitutions.forEach((key, group) {
+        for (var opt in group.options) {
+          foods.add(opt.name);
         }
       });
     }
@@ -744,8 +735,7 @@ class DietProvider extends ChangeNotifier {
 
   Future<void> clearData() async {
     await _storage.clearAll();
-    _dietData = null;
-    _substitutions = null;
+    _dietPlan = null; // [FIX] Nullifichiamo l'oggetto
     _pantryItems = [];
     _activeSwaps = {};
     _shoppingList = [];
@@ -754,9 +744,27 @@ class DietProvider extends ChangeNotifier {
   }
 
   // Deep copy e Helpers per il Sync differenziale
+// Deep copy tramite serializzazione/deserializzazione JSON
   Map<String, dynamic>? _deepCopy(Map<String, dynamic>? input) {
     if (input == null) return null;
     return jsonDecode(jsonEncode(input));
+  }
+
+  // Sanitize: Rimuove 'consumed' e stati UI per confrontare la struttura pura
+  dynamic _sanitize(dynamic input) {
+    if (input is Map) {
+      final newMap = <String, dynamic>{};
+      input.forEach((key, value) {
+        // Rimuoviamo il flag locale 'consumed' per i confronti di sync
+        if (key != 'consumed') {
+          newMap[key.toString()] = _sanitize(value);
+        }
+      });
+      return newMap;
+    } else if (input is List) {
+      return input.map((e) => _sanitize(e)).toList();
+    }
+    return input;
   }
 
   bool _hasStructuralChanges(
@@ -770,36 +778,17 @@ class DietProvider extends ChangeNotifier {
     return sCurrent != sOld;
   }
 
-  // Rimuove campi volatili (consumed) per confrontare solo la struttura
-  // Rimuove campi volatili (consumed) per confrontare solo la struttura
-  dynamic _sanitize(dynamic input) {
-    if (input is Map) {
-      final newMap = <String, dynamic>{};
-      input.forEach((key, value) {
-        // [FIX] NON rimuovere 'cad_code'! È fondamentale per le sostituzioni.
-        // Rimuovi solo 'consumed' o altri stati temporanei UI.
-        if (key != 'consumed') {
-          newMap[key.toString()] = _sanitize(value);
-        }
-      });
-      return newMap;
-    } else if (input is List) {
-      return input.map((e) => _sanitize(e)).toList();
-    }
-    return input;
-  }
-
   Future<void> _scheduleMealNotifications() async {
-    if (_dietData == null) return;
+    if (_dietPlan == null) return;
 
     var status = await Permission.notification.status;
 
     if (status.isGranted) {
-      // Abbiamo i permessi: pianifichiamo silenziosamente
-      await _notificationService.scheduleDietNotifications(_dietData!);
+      // [FIX] Passiamo la mappa 'plan' al servizio notifiche
+      // Assumendo che il tuo NotificationService si aspetti Map<String, dynamic>
+      await _notificationService.scheduleDietNotifications(_dietPlan!.plan);
       debugPrint("🔔 Notifiche pianificate con successo");
     } else {
-      // Mancano i permessi: segnaliamo alla UI di chiedere aiuto all'utente
       _needsNotificationPermissions = true;
       notifyListeners();
     }

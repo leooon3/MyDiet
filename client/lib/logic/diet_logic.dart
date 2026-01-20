@@ -1,20 +1,22 @@
 import '../models/pantry_item.dart';
 import '../models/active_swap.dart';
 import 'diet_calculator.dart'; // Per DietCalculator e le Eccezioni
+import '../models/diet_models.dart';
 
 class DietLogic {
   /// Determina QUALI ingredienti consumare (Originali o Swap)
   /// Sostituisce la vecchia logica di `_processItem`
   static List<Map<String, String>> resolveIngredients({
-    required dynamic dish,
+    required Dish dish, // <--- Modificato da dynamic a Dish
     required String day,
     required String mealType,
     required Map<String, ActiveSwap> activeSwaps,
   }) {
-    final String? instanceId = dish['instance_id']?.toString();
-    final int cadCode = dish['cad_code'] ?? 0;
+    // Accesso diretto alle proprietà dell'oggetto (Dot notation)
+    final String instanceId = dish.instanceId;
+    final int cadCode = dish.cadCode;
 
-    String swapKey = (instanceId != null && instanceId.isNotEmpty)
+    String swapKey = (instanceId.isNotEmpty)
         ? "$day::$mealType::$instanceId"
         : "$day::$mealType::$cadCode";
 
@@ -33,30 +35,25 @@ class DietLogic {
           });
         }
       } else {
+        // Fallback visivo
         result.add({
           'name': activeSwap.name,
-          'qty': "${activeSwap.qty} ${activeSwap.unit}",
+          'qty': activeSwap.qty,
         });
       }
     } else {
-      // CASO B: Piatto originale
-      List<dynamic> itemsToCheck = [];
-      String qtyStr = dish['qty']?.toString() ?? "";
-
-      if (qtyStr == "N/A" ||
-          (dish['ingredients'] != null &&
-              (dish['ingredients'] as List).isNotEmpty)) {
-        itemsToCheck = dish['ingredients'] ?? [];
+      // CASO B: Nessuno swap, usa il piatto originale
+      if (dish.isComposed) {
+        for (var ing in dish.ingredients) {
+          result.add({
+            'name': ing.name,
+            'qty': ing.qty,
+          });
+        }
       } else {
-        itemsToCheck = [
-          {'name': dish['name'], 'qty': qtyStr.isEmpty ? '1' : qtyStr},
-        ];
-      }
-
-      for (var itemData in itemsToCheck) {
         result.add({
-          'name': itemData['name'].toString(),
-          'qty': itemData['qty'].toString(),
+          'name': dish.name,
+          'qty': dish.qty,
         });
       }
     }

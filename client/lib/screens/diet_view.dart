@@ -4,30 +4,30 @@ import '../providers/diet_provider.dart';
 import '../widgets/meal_card.dart';
 import '../models/active_swap.dart';
 import '../models/pantry_item.dart';
+import '../models/diet_models.dart'; // Importa il modello
 import '../core/error_handler.dart';
 import '../logic/diet_calculator.dart';
 
 class DietView extends StatelessWidget {
   final String day;
-  final Map<String, dynamic>? dietData;
+  final DietPlan? dietPlan; // [FIX] Accetta l'oggetto DietPlan
   final bool isLoading;
   final Map<String, ActiveSwap> activeSwaps;
-  final Map<String, dynamic>? substitutions;
+  // substitutions rimosso perché incluso in dietPlan
   final List<PantryItem> pantryItems;
   final bool isTranquilMode;
 
   const DietView({
     super.key,
     required this.day,
-    required this.dietData,
+    required this.dietPlan, // [FIX] Aggiornato
     required this.isLoading,
     required this.activeSwaps,
-    required this.substitutions,
+    // substitutions rimosso
     required this.pantryItems,
     required this.isTranquilMode,
   });
 
-  // Funzione helper per capire se è oggi
   bool _isToday(String dayName) {
     final now = DateTime.now();
     final italianDays = [
@@ -37,9 +37,8 @@ class DietView extends StatelessWidget {
       "Giovedì",
       "Venerdì",
       "Sabato",
-      "Domenica",
+      "Domenica"
     ];
-    // weekday 1=Lunedì, quindi index = weekday - 1
     int index = now.weekday - 1;
     if (index >= 0 && index < italianDays.length) {
       return italianDays[index].toLowerCase() == dayName.toLowerCase();
@@ -53,7 +52,8 @@ class DietView extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (dietData == null || dietData!.isEmpty) {
+    // [FIX] Controllo sull'oggetto e sulla mappa interna
+    if (dietPlan == null || dietPlan!.plan.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -69,7 +69,8 @@ class DietView extends StatelessWidget {
       );
     }
 
-    final mealsOfDay = dietData![day];
+    // [FIX] Accesso tipizzato alla mappa plan
+    final mealsOfDay = dietPlan!.plan[day];
 
     if (mealsOfDay == null) {
       return Center(
@@ -98,7 +99,6 @@ class DietView extends StatelessWidget {
       "Nell'Arco Della Giornata",
     ];
 
-    // Calcoliamo se è oggi una volta sola per il build
     final bool isCurrentDay = _isToday(day);
 
     return Container(
@@ -116,11 +116,11 @@ class DietView extends StatelessWidget {
             return MealCard(
               day: day,
               mealName: mealType,
-              foods: List.from(mealsOfDay[mealType]),
+              foods: mealsOfDay[mealType]!, // [FIX] Passa List<Dish>
               activeSwaps: activeSwaps,
               availabilityMap: context.watch<DietProvider>().availabilityMap,
               isTranquilMode: isTranquilMode,
-              isToday: isCurrentDay, // [FIX] Passiamo l'info se è oggi
+              isToday: isCurrentDay,
               onEat: (index) => _handleConsume(context, day, mealType, index),
               onSwap: (key, cadCode) => _showSwapDialog(context, key, cadCode),
               onEdit: (index, name, qty) => context
@@ -191,6 +191,8 @@ class DietView extends StatelessWidget {
     DietProvider provider,
     UnitMismatchException e,
   ) {
+    // ... (Logica invariata, ma usa e.item che ora è typed se DietLogic è aggiornato)
+    // Per sicurezza, assumiamo che DietLogic lanci l'eccezione corretta
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -250,14 +252,16 @@ class DietView extends StatelessWidget {
     );
   }
 
+  // [FIX] Logica Swap aggiornata per usare DietPlan (Oggetti) invece di Map
   void _showSwapDialog(BuildContext context, String swapKey, int cadCode) {
-    final subs = context.read<DietProvider>().substitutions;
+    // Accesso sicuro tramite dietPlan
+    final subs = dietPlan?.substitutions;
+    final String lookupCode = cadCode.toString();
 
-    // [FIX] Controllo preventivo se ci sono sostituzioni
+    // Controllo esistenza sostituzioni
     if (subs == null ||
-        !subs.containsKey(cadCode.toString()) ||
-        subs[cadCode.toString()]['options'] == null ||
-        (subs[cadCode.toString()]['options'] as List).isEmpty) {
+        !subs.containsKey(lookupCode) ||
+        subs[lookupCode]!.options.isEmpty) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -276,8 +280,9 @@ class DietView extends StatelessWidget {
       return;
     }
 
-    final subGroup = subs[cadCode.toString()];
-    final List<dynamic> options = subGroup['options'];
+    // [FIX] Estrazione dati tipizzati
+    final substitutionGroup = subs[lookupCode]!;
+    final List<SubstitutionOption> options = substitutionGroup.options;
 
     showModalBottomSheet(
       context: context,
@@ -285,14 +290,14 @@ class DietView extends StatelessWidget {
         return ListView.builder(
           itemCount: options.length,
           itemBuilder: (ctx, idx) {
-            final opt = options[idx];
+            final opt = options[idx]; // SubstitutionOption object
             return ListTile(
-              title: Text(opt['name']),
-              subtitle: Text(opt['qty'] ?? ""),
+              title: Text(opt.name), // .name
+              subtitle: Text(opt.qty), // .qty
               onTap: () {
                 final newSwap = ActiveSwap(
-                  name: opt['name'],
-                  qty: opt['qty'] ?? "",
+                  name: opt.name,
+                  qty: opt.qty,
                   unit: "",
                   swappedIngredients: [],
                 );
