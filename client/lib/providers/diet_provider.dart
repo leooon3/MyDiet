@@ -735,4 +735,13 @@ class DietProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // Fix #8-9: Dispose di risorse per evitare memory leak
+  @override
+  void dispose() {
+    _repository.dispose();
+    _notificationService.dispose();
+    debugPrint("🧹 DietProvider disposed");
+    super.dispose();
+  }
 }

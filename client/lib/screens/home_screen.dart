@@ -144,15 +144,16 @@ class _MainScreenContentState extends State<MainScreenContent>
     } catch (_) {}
   }
 
-// ✅ NUOVA FUNZIONE - Aggiungi questa
+// Fix #2: Usa direttamente JailbreakService invece di cercare Provider<bool>
   Future<void> _checkJailbreak() async {
     try {
-      final isJailbroken = context.read<bool>();
-      if (isJailbroken) {
+      final jailbreakService = JailbreakService();
+      final isJailbroken = await jailbreakService.checkDevice();
+      if (isJailbroken && mounted) {
         _showJailbreakWarning();
       }
     } catch (e) {
-      // Ignora errore se provider non disponibile
+      // Ignora errore se jailbreak detection non disponibile (es. emulatore)
       debugPrint('Jailbreak check error: $e');
     }
   }

@@ -198,35 +198,39 @@ SIMPLIFIED SCHEMA RULES:
         try:
             import firebase_admin
             from firebase_admin import firestore
-            
+            from datetime import datetime, timedelta, timezone
+
             db = firestore.client()
             cache_ref = db.collection('gemini_cache').document(content_hash)
             cache_doc = cache_ref.get()
-            
+
             if cache_doc.exists:
                 data = cache_doc.to_dict()
-                
+
                 # Verifica che la cache non sia troppo vecchia (es. 30 giorni)
-                from datetime import datetime, timedelta
                 cached_at = data.get('cached_at')
                 if cached_at:
-                    # Firestore timestamp to datetime
                     cache_time = cached_at
                     if isinstance(cache_time, datetime):
-                        age = datetime.now() - cache_time
+                        # Fix #13: Usa datetime timezone-aware per confronto corretto
+                        now = datetime.now(timezone.utc)
+                        # Se cache_time è naive, rendilo UTC
+                        if cache_time.tzinfo is None:
+                            cache_time = cache_time.replace(tzinfo=timezone.utc)
+                        age = now - cache_time
                         if age > timedelta(days=30):
                             # Cache scaduta, eliminala
                             cache_ref.delete()
                             return None
-                
+
                 return data.get('result')
-            
+
             return None
-            
+
         except Exception as e:
             print(f"⚠️ Errore lettura cache: {e}")
             return None  # Se la cache non funziona, prosegui con Gemini
-    
+
     def _save_cached_response(self, content_hash: str, result):
         """
         Salva il risultato in cache Firestore per riutilizzo futuro.
@@ -235,15 +239,15 @@ SIMPLIFIED SCHEMA RULES:
         try:
             import firebase_admin
             from firebase_admin import firestore
-            from datetime import datetime
+            from datetime import datetime, timezone
             
             db = firestore.client()
             cache_ref = db.collection('gemini_cache').document(content_hash)
             
-            # Salva con timestamp per tracking età cache
+            # Salva con timestamp UTC per tracking età cache
             cache_ref.set({
                 'result': result,
-                'cached_at': datetime.now(),
+                'cached_at': datetime.now(timezone.utc),
                 'hash': content_hash[:8]  # Solo per debug
             })
             

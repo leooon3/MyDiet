@@ -8,54 +8,18 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, Optional, List, Dict
 
-def sanitize_sensitive_data(data: Dict[str, Any]) -> Dict[str, Any]:
+def sanitize_error_message(error: str) -> str:
     """
-    Rimuove dati sensibili da dizionari prima di loggarli.
-    Protegge token, password, email, dati medici.
+    Rimuove dati sensibili (token, email) dai messaggi di errore prima di loggarli.
+    Usata in tutti i blocchi except per evitare leak di informazioni.
     """
-    if not isinstance(data, dict):
-        return data
-    
-    sanitized = data.copy()
-    
-    sensitive_keys = [
-        'authorization', 'token', 'password', 'secret',
-        'api_key', 'apikey', 'bearer', 'jwt',
-        'fcm_token', 'refresh_token', 'access_token',
-        'email', 'phone', 'ssn', 'credit_card',
-    ]
-    
-    for key in list(sanitized.keys()):
-        key_lower = key.lower()
-        
-        if any(sens in key_lower for sens in sensitive_keys):
-            sanitized[key] = '***REDACTED***'
-        
-        elif isinstance(sanitized[key], dict):
-            sanitized[key] = sanitize_sensitive_data(sanitized[key])
-        
-        elif isinstance(sanitized[key], list):
-            sanitized[key] = [
-                sanitize_sensitive_data(item) if isinstance(item, dict) else item
-                for item in sanitized[key]
-            ]
-    
-    return sanitized
-
-
-def sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
-    """Sanitizza headers HTTP rimuovendo token di autenticazione."""
-    sanitized = dict(headers)  # Converti da UploadFile headers
-    
-    if 'authorization' in sanitized:
-        auth_value = sanitized['authorization']
-        if auth_value.startswith('Bearer '):
-            token = auth_value[7:]
-            if len(token) > 8:
-                sanitized['authorization'] = f"Bearer {token[:4]}...{token[-4:]}"
-            else:
-                sanitized['authorization'] = "Bearer ***"
-    
+    sanitized = str(error)
+    # Rimuovi token Bearer
+    sanitized = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', sanitized)
+    # Rimuovi token generici
+    sanitized = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', sanitized, flags=re.IGNORECASE)
+    # Rimuovi email
+    sanitized = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '***@***.***', sanitized)
     return sanitized
 
 
@@ -90,33 +54,16 @@ MEAL_ORDER = [
 ]
 
 # ✅ Custom processor per sanitizzare dati sensibili
-class SensitiveDataFilter(structlog.processors.TimeStamper):
-    """Filtra automaticamente token e dati sensibili dai log"""
-    
-    def __call__(self, logger, method_name, event_dict):
-        # Censura pattern comuni di token JWT
-        if 'error' in event_dict:
-            error_str = str(event_dict['error'])
-            # Regex per token Bearer
-            error_str = re.sub(
-                r'Bearer\s+[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+',
-                'Bearer ***REDACTED***',
-                error_str
-            )
-            # Censura email
-            error_str = re.sub(
-                r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-                '***@***.***',
-                error_str
-            )
-            event_dict['error'] = error_str
-        
-        return event_dict
+def sensitive_data_filter(logger, method_name, event_dict):
+    """Filtra automaticamente token e dati sensibili dai log (structlog processor)"""
+    if 'error' in event_dict:
+        event_dict['error'] = sanitize_error_message(event_dict['error'])
+    return event_dict
 
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
-        SensitiveDataFilter(),  # ✅ AGGIUNGI QUESTO
+        sensitive_data_filter,
         structlog.processors.JSONRenderer()
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -141,11 +88,10 @@ if not firebase_admin._apps:
             
     except Exception as e:
         error_msg = str(e)
-    # Rimuovi token se presenti nell'errore
-    error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-    error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-    
-    logger.error("upload_diet_error", error=error_msg)
+        # Rimuovi token se presenti nell'errore
+        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+        logger.error("firebase_init_error", error=error_msg)
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
@@ -273,20 +219,10 @@ async def maintenance_worker():
                                 "updated_by": "system_scheduler"
                             })
                     except Exception as e:
-                        error_msg = str(e)
-                        # Rimuovi token se presenti nell'errore
-                        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-                        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-                        
-                        logger.error("upload_diet_error", error=error_msg)
+                        logger.error("scheduler_error", error=sanitize_error_message(e))
         except Exception as e:
-            error_msg = str(e)
-            # Rimuovi token se presenti nell'errore
-            error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-            error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-            
-            logger.error("upload_diet_error", error=error_msg)
-            
+            logger.error("maintenance_worker_error", error=sanitize_error_message(e))
+
         await asyncio.sleep(60)
 
 @app.on_event("startup")
@@ -299,20 +235,21 @@ async def start_background_tasks():
 async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), token: dict = Depends(verify_token)):
     user_id = token['uid']
     user_role = token.get('role', 'user')
-    if user_role not in ['independent', 'admin']:
+    # Fix #14: Permetti anche ai professional (nutrizionisti) di caricare diete per se stessi
+    if user_role not in ['independent', 'admin', 'nutritionist']:
         raise HTTPException(
-            status_code=403, 
-            detail="Solo utenti indipendenti e admin possono caricare diete. I clienti ricevono le diete dal nutrizionista."
+            status_code=403,
+            detail="Solo utenti indipendenti, nutrizionisti e admin possono caricare diete. I clienti ricevono le diete dal nutrizionista."
         )
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
-    
+
     async with heavy_tasks_semaphore:
         try:
             # 1. Parsing
             raw_data = await run_in_threadpool(diet_parser.parse_complex_diet, file.file)
             formatted_data = _convert_to_app_format(raw_data)
             dict_data = formatted_data.dict()
-            
+
             # 2. Salvataggio su Firestore
             db = firebase_admin.firestore.client()
             user_diets_ref = db.collection('users').document(user_id).collection('diets')
@@ -322,7 +259,7 @@ async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token:
                 'lastUpdated': firebase_admin.firestore.SERVER_TIMESTAMP,
                 'plan': dict_data.get('plan'),
                 'substitutions': dict_data.get('substitutions'),
-                'activeSwaps': {}, 
+                'activeSwaps': {},
                 'uploadedBy': 'user_upload',
                 'fileName': file.filename
             }
@@ -330,22 +267,29 @@ async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token:
             # A. Salviamo/Sovrascriviamo la dieta "current" (Quella che l'app carica)
             user_diets_ref.document('current').set(diet_payload)
 
+            # B. Fix #10: Salviamo anche nello storico utente (backup cronologico)
+            user_diets_ref.add(diet_payload)
+
+            # C. Fix #10: Salviamo nello storico globale admin
+            db.collection('diet_history').add({
+                'userId': user_id,
+                'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
+                'fileName': file.filename,
+                'parsedData': dict_data,
+                'uploadedBy': user_id
+            })
+
             # 3. Notifica
             if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
             
             return formatted_data
 
         except Exception as e:
-            error_msg = str(e)
-            # Rimuovi token se presenti nell'errore
-            error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-            error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-            
-            logger.error("upload_diet_error", error=error_msg)
+            logger.error("upload_diet_error", error=sanitize_error_message(e))
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             await file.close()
- 
+
 @app.post("/upload-diet/{target_uid}", response_model=DietResponse)
 @limiter.limit("10/minute")
 async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), requester: dict = Depends(verify_professional)):
@@ -399,17 +343,12 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
         return formatted_data
 
     except Exception as e:
-        error_msg = str(e)
-        # Rimuovi token se presenti nell'errore
-        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-        
-        logger.error("upload_diet_error", error=error_msg)
+        logger.error("admin_upload_diet_error", error=sanitize_error_message(e))
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await file.close()
 
-        
+
 @app.post("/scan-receipt")
 async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_foods: Json[List[str]] = Form(...), user_id: str = Depends(get_current_uid)):
     try:
@@ -421,12 +360,7 @@ async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_f
             
         return JSONResponse(content=found_items)
     except Exception as e:
-        error_msg = str(e)
-        # Rimuovi token se presenti nell'errore
-        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-        
-        logger.error("upload_diet_error", error=error_msg)
+        logger.error("scan_receipt_error", error=sanitize_error_message(e))
         raise HTTPException(status_code=500, detail="Errore durante la scansione dello scontrino")
     finally:
         await file.close()
@@ -604,12 +538,7 @@ async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_pr
         
     except HTTPException as he: raise he
     except Exception as e:
-        error_msg = str(e)
-        # Rimuovi token se presenti nell'errore
-        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-        
-        logger.error("upload_diet_error", error=error_msg)
+        logger.error("delete_user_error", error=sanitize_error_message(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/admin/delete-diet/{diet_id}")
@@ -793,12 +722,7 @@ async def get_secure_user_history(target_uid: str, requester: dict = Depends(ver
         return results
     except HTTPException as he: raise he
     except Exception as e:
-        error_msg = str(e)
-        # Rimuovi token se presenti nell'errore
-        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
-        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
-        
-        logger.error("upload_diet_error", error=error_msg)
+        logger.error("secure_gateway_error", error=sanitize_error_message(e))
         raise HTTPException(status_code=500, detail="Error fetching history")
 
 @app.get("/admin/users-secure")
