@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:retry/retry.dart';
@@ -33,6 +34,7 @@ class ApiClient {
     String endpoint,
     String filePath, {
     Map<String, String>? fields,
+    Function(int sent, int total)? onProgress, // ✅ AGGIUNGI questo parametro
   }) async {
     final r = RetryOptions(
       maxAttempts: 3,
@@ -135,6 +137,4 @@ class ApiClient {
       throw ApiException("Errore imprevisto: $e", 500);
     }
   }
-
-  int min(int a, int b) => a < b ? a : b;
 }

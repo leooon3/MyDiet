@@ -46,6 +46,7 @@ dependencies:
   http_parser: ^4.0.2
   csv: ^6.0.0
   universal_html: ^2.2.4
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

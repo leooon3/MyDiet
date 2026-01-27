@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../models/active_swap.dart';
+import '../models/diet_models.dart'; // [IMPORTANTE] Serve per capire cos'è un Dish
 
 class MealCard extends StatelessWidget {
   final String day;
   final String mealName;
-  final List<dynamic> foods;
+  final List<Dish> foods; // [FIX] Ora è tipizzato correttamente
   final Map<String, ActiveSwap> activeSwaps;
   final Map<String, bool> availabilityMap;
   final bool isTranquilMode;
@@ -93,8 +94,8 @@ class MealCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool allConsumed =
-        foods.isNotEmpty && foods.every((f) => f['consumed'] == true);
+    // [FIX] Usa .isConsumed invece di ['consumed']
+    bool allConsumed = foods.isNotEmpty && foods.every((f) => f.isConsumed);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -103,7 +104,8 @@ class MealCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black
+                .withValues(alpha: 0.05), // Fix per versioni vecchie di Flutter
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -162,42 +164,54 @@ class MealCard extends StatelessWidget {
                     // Lista Piatti
                     Column(
                       children: List.generate(foods.length, (index) {
-                        final originalFood = foods[index];
-                        final int cadCode = originalFood['cad_code'] ?? 0;
-                        final String? instanceId =
-                            originalFood['instance_id']?.toString();
+                        final originalFood =
+                            foods[index]; // Ora è un oggetto Dish
+                        final int cadCode = originalFood.cadCode;
+                        final String instanceId = originalFood.instanceId;
 
-                        // MODIFICA: Generazione chiave robusta allineata a DietLogic
-                        final String swapKey =
-                            (instanceId != null && instanceId.isNotEmpty)
-                                ? "$day::$mealName::$instanceId"
-                                : "$day::$mealName::$cadCode";
+                        // Generazione chiave robusta
+                        final String swapKey = (instanceId.isNotEmpty)
+                            ? "$day::$mealName::$instanceId"
+                            : "$day::$mealName::$cadCode";
 
                         // --- LOGICA SWAP ---
                         final bool isSwapped = activeSwaps.containsKey(swapKey);
                         final activeSwap =
                             isSwapped ? activeSwaps[swapKey] : null;
 
-                        // Se c'è uno swap, usiamo i suoi dati, altrimenti quelli originali
-                        final String displayName = isSwapped
-                            ? activeSwap!.name
-                            : originalFood['name'].toString();
+                        // Dati da visualizzare (Swap o Originale)
+                        // [FIX] Usa .name e .qty invece di ['name']
+                        final String displayName =
+                            isSwapped ? activeSwap!.name : originalFood.name;
 
                         final String displayQtyRaw = isSwapped
                             ? "${activeSwap!.qty} ${activeSwap.unit}"
-                            : "${originalFood['qty'] ?? ''} ${originalFood['unit'] ?? ''}";
+                            : originalFood
+                                .qty; // originalFood.qty include già l'unità nel nuovo modello
 
-                        final bool isConsumed =
-                            originalFood['consumed'] == true;
+                        final bool isConsumed = originalFood.isConsumed;
 
+                        assert(
+                          [
+                            'Colazione',
+                            'Seconda Colazione',
+                            'Spuntino',
+                            'Pranzo',
+                            'Merenda',
+                            'Cena',
+                            'Spuntino Serale',
+                            "Nell'Arco Della Giornata"
+                          ].contains(mealName),
+                          '❌ BUG: Meal name "$mealName" non standardizzato! Controlla normalize_meal_name()',
+                        );
                         String availKey = "${day}_${mealName}_$index";
                         bool isAvailable = availabilityMap[availKey] ?? false;
 
-                        // Ingredienti: Se scambiato, non mostriamo quelli vecchi
-                        // (o potremmo mostrare quelli nuovi se 'swappedIngredients' fosse popolato)
-                        final List<dynamic>? ingredients = isSwapped
-                            ? null // Nascondi ingredienti originali se scambiato
-                            : originalFood['ingredients'];
+                        // Ingredienti
+                        final List<Ingredient>? ingredients = isSwapped
+                            ? null
+                            : originalFood
+                                .ingredients; // Ora è List<Ingredient>
 
                         final bool hasIngredients =
                             ingredients != null && ingredients.isNotEmpty;
@@ -217,7 +231,6 @@ class MealCard extends StatelessWidget {
 
                         return Container(
                           decoration: BoxDecoration(
-                            // Evidenzia leggermente lo sfondo se è uno swap
                             color: isSwapped
                                 ? Colors.orange.withValues(alpha: 0.05)
                                 : null,
@@ -264,7 +277,6 @@ class MealCard extends StatelessWidget {
                                     children: [
                                       Row(
                                         children: [
-                                          // Se scambiato, mostra iconcina piccola
                                           if (isSwapped)
                                             const Padding(
                                               padding: EdgeInsets.only(
@@ -300,10 +312,11 @@ class MealCard extends StatelessWidget {
                                         ],
                                       ),
                                       const SizedBox(height: 4),
+                                      // [FIX] Loop sugli ingredienti oggetto
                                       if (hasIngredients)
                                         ...ingredients.map((ing) {
-                                          String iName = ing['name'].toString();
-                                          String iQty = ing['qty'].toString();
+                                          String iName = ing.name;
+                                          String iQty = ing.qty;
                                           bool iRelax = _relaxableFoods.any(
                                             (tag) => iName
                                                 .toLowerCase()
@@ -352,7 +365,6 @@ class MealCard extends StatelessWidget {
                                   if (cadCode > 0)
                                     IconButton(
                                       icon: Icon(
-                                        // Icona piena se già scambiato
                                         isSwapped
                                             ? Icons.swap_horiz
                                             : Icons.swap_horiz_outlined,
@@ -378,9 +390,8 @@ class MealCard extends StatelessWidget {
                                         child: Container(
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
-                                            color: AppColors.primary.withValues(
-                                              alpha: 0.1,
-                                            ),
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.1),
                                             shape: BoxShape.circle,
                                           ),
                                           child: const Icon(

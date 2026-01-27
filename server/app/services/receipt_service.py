@@ -97,8 +97,7 @@ class ReceiptScanner:
                         print(f"  ✅ MATCH: {item.name} ({item.quantity})")
                         found_items.append({
                             "name": item.name,
-                            "quantity": item.quantity,
-                            "original_scan": item.name
+                            "quantity": item.quantity
                         })
             
             return found_items

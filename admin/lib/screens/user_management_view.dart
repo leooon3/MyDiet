@@ -3,6 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../admin_repository.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:path_provider/path_provider.dart';
 
 class UserManagementView extends StatefulWidget {
   const UserManagementView({super.key});
@@ -1459,13 +1464,137 @@ class _DietDetailScreen extends StatelessWidget {
   }
 }
 
-class _ParserConfigScreen extends StatelessWidget {
+class _ParserConfigScreen extends StatefulWidget {
   final String targetUid;
   const _ParserConfigScreen({required this.targetUid});
+
+  @override
+  State<_ParserConfigScreen> createState() => _ParserConfigScreenState();
+}
+
+class _ParserConfigScreenState extends State<_ParserConfigScreen> {
+  final AdminRepository _repo = AdminRepository();
+  final TextEditingController _promptController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingPrompt();
+  }
+
+  Future<void> _loadExistingPrompt() async {
+    setState(() => _isLoading = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      final doc = await db.collection('users').doc(widget.targetUid).get();
+      if (doc.exists) {
+        final data = doc.data();
+        _promptController.text = data?['custom_parser_prompt'] ?? '';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Errore caricamento: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _uploadPrompt() async {
+    if (_promptController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Inserisci un prompt personalizzato")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // Salva come file temporaneo
+      final bytes = utf8.encode(_promptController.text);
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/custom_prompt.txt');
+      await file.writeAsBytes(bytes);
+
+      // Upload tramite repository
+      await _repo.uploadParserConfig(
+        widget.targetUid,
+        PlatformFile(
+          name: 'custom_prompt.txt',
+          size: bytes.length,
+          bytes: Uint8List.fromList(bytes),
+          path: file.path,
+        ),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Parser personalizzato salvato!")),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Errore: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Config Parser Placeholder")),
+      appBar: AppBar(
+        title: const Text("Parser Personalizzato"),
+        actions: [
+          if (!_isLoading)
+            IconButton(icon: const Icon(Icons.save), onPressed: _uploadPrompt),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Istruzioni per Gemini AI",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Definisci come Gemini deve interpretare i PDF di questo nutrizionista. "
+                    "Esempio: 'I pasti sono sempre indicati con emoji 🍽️' oppure 'Le quantità sono in once invece che grammi'.",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: TextField(
+                      controller: _promptController,
+                      maxLines: null,
+                      expands: true,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: "Inserisci le istruzioni personalizzate...",
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
+  }
+
+  @override
+  void dispose() {
+    _promptController.dispose();
+    super.dispose();
   }
 }

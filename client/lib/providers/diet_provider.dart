@@ -29,6 +29,7 @@ class DietProvider extends ChangeNotifier {
   List<String> _shoppingList = [];
   Map<String, bool> _availabilityMap = {};
   Map<String, double> _conversions = {};
+  bool _isCalculating = false;
 
   // Campi per il Sync Intelligente
   DateTime _lastCloudSave = DateTime.fromMillisecondsSinceEpoch(0);
@@ -39,6 +40,7 @@ class DietProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isTranquilMode = false;
   String? _error;
+  double _uploadProgress = 0.0;
   final NotificationService _notificationService =
       NotificationService(); // Servizio notifiche
 
@@ -143,6 +145,7 @@ class DietProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isTranquilMode => _isTranquilMode;
   String? get error => _error;
+  double get uploadProgress => _uploadProgress;
   bool get hasError => _error != null;
 
   DietProvider(this._repository);
@@ -204,7 +207,7 @@ class DietProvider extends ChangeNotifier {
           _lastCloudSave = DateTime.now();
 
           _recalcAvailability();
-          await _scheduleMealNotifications();
+          await scheduleMealNotifications();
           notifyListeners();
           debugPrint("☁️ Sync Cloud completato (da 'current')");
         }
@@ -468,15 +471,26 @@ class DietProvider extends ChangeNotifier {
 
   Future<void> uploadDiet(String path) async {
     _setLoading(true);
+    _uploadProgress = 0.0; // ✅ Reset
     clearError();
+
     try {
       String? token;
       try {
         token = await FirebaseMessaging.instance.getToken();
       } catch (_) {}
 
-      // Il repository ora restituisce direttamente un oggetto DietPlan
-      final result = await _repository.uploadDiet(path, fcmToken: token);
+      // ✅ Upload con progress callback REALE
+      final result = await _repository.uploadDiet(
+        path,
+        fcmToken: token,
+        onProgress: (progress) {
+          _uploadProgress = progress;
+          notifyListeners(); // ✅ Aggiorna UI in tempo reale
+        },
+      );
+
+      _uploadProgress = 1.0; // ✅ Completo
 
       _dietPlan = result;
 
@@ -568,10 +582,17 @@ class DietProvider extends ChangeNotifier {
   }
 
   Future<void> _recalcAvailability() async {
+    // ✅ PROTEZIONE: Se c'è già un calcolo in corso, ignora questa chiamata
+    if (_isCalculating) {
+      debugPrint("⏭️ Calcolo availability già in corso, skip");
+      return;
+    }
+
     if (_dietPlan == null) return;
 
-    // [FIX] Serializziamo il piano perché l'Isolate lavora con dati puri (JSON/Map)
-    // e non può accedere agli oggetti complessi del main isolate facilmente.
+    _isCalculating = true; // ✅ LOCK attivato
+
+    // Serializziamo il piano perchè l'Isolate lavora con dati puri
     final planJson = _dietPlan!.toJson()['plan'];
 
     final payload = {
@@ -598,92 +619,13 @@ class DietProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint("Isolate Calc Error: $e");
+    } finally {
+      _isCalculating =
+          false; // ✅ LOCK rilasciato (sempre, anche in caso di errore)
     }
   }
+
   // --- UTILS & HELPERS ---
-
-  // FIX 2.3: Generazione Lista Spesa Centralizzata (Swap Aware)
-  List<String> generateSmartShoppingList() {
-    if (_dietPlan == null) return [];
-
-    final Map<String, double> totals = {};
-    // Ordine Giorni Fisso
-    final days = [
-      "Lunedì",
-      "Martedì",
-      "Mercoledì",
-      "Giovedì",
-      "Venerdì",
-      "Sabato",
-      "Domenica",
-    ];
-
-    for (var day in days) {
-      // Accesso sicuro alla mappa del piano
-      if (!_dietPlan!.plan.containsKey(day)) continue;
-      final meals = _dietPlan!.plan[day]!;
-
-      meals.forEach((mealType, dishes) {
-        for (int i = 0; i < dishes.length; i++) {
-          var dish = dishes[i];
-
-          // 1. Controllo Consumato (Ora è una proprietà tipizzata)
-          if (dish.isConsumed) continue;
-
-          // 2. Controllo Dispensa (Logica Availability Map)
-          String availKey = "${day}_${mealType}_$i";
-          if (_availabilityMap.containsKey(availKey) &&
-              _availabilityMap[availKey] == true) {
-            continue;
-          }
-
-          // 3. Logica Swap (Usa instanceId o cadCode)
-          String swapKey = (dish.instanceId.isNotEmpty)
-              ? "${day}_${mealType}_${dish.instanceId}"
-              : "${day}_${mealType}_${dish.cadCode}";
-
-          List<dynamic> itemsToProcess = [];
-
-          if (_activeSwaps.containsKey(swapKey)) {
-            final swap = _activeSwaps[swapKey]!;
-            if (swap.swappedIngredients != null &&
-                swap.swappedIngredients!.isNotEmpty) {
-              itemsToProcess = swap.swappedIngredients!;
-            } else {
-              itemsToProcess = [
-                {'name': swap.name, 'qty': "${swap.qty} ${swap.unit}"},
-              ];
-            }
-          } else {
-            // Piatto Originale
-            if (dish.qty == 'N/A') continue; // Skip Headers
-
-            if (dish.isComposed) {
-              // Convertiamo gli ingredienti (oggetto) in mappa per processarli qui
-              itemsToProcess = dish.ingredients.map((e) => e.toJson()).toList();
-            } else {
-              itemsToProcess = [
-                {'name': dish.name, 'qty': dish.qty},
-              ];
-            }
-          }
-
-          // Aggregazione
-          for (var item in itemsToProcess) {
-            String name = item['name'].toString().trim();
-            if (name.toLowerCase().contains("libero")) {
-              continue; // Skip pasti liberi
-            }
-            String entry = "$name (${item['qty']})";
-            totals[entry] = (totals[entry] ?? 0) + 1;
-          }
-        }
-      });
-    }
-
-    return totals.keys.toList();
-  }
-
   List<String> _extractAllowedFoods() {
     final Set<String> foods = {};
     if (_dietPlan != null) {
@@ -778,7 +720,7 @@ class DietProvider extends ChangeNotifier {
     return sCurrent != sOld;
   }
 
-  Future<void> _scheduleMealNotifications() async {
+  Future<void> scheduleMealNotifications() async {
     if (_dietPlan == null) return;
 
     var status = await Permission.notification.status;

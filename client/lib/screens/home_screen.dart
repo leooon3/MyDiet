@@ -1,3 +1,4 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -7,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
 
 import '../providers/diet_provider.dart';
-import '../services/notification_service.dart';
 import '../services/storage_service.dart';
 import '../services/auth_service.dart';
 import '../constants.dart';
@@ -19,6 +19,7 @@ import 'login_screen.dart';
 import 'history_screen.dart';
 import 'change_password_screen.dart';
 import 'package:permission_handler/permission_handler.dart'; // <--- NUOVO
+import '../services/jailbreak_service.dart';
 
 // --- 1. WRAPPER PRINCIPALE ---
 class MainScreen extends StatelessWidget {
@@ -78,6 +79,7 @@ class _MainScreenContentState extends State<MainScreenContent>
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkJailbreak();
       _initAppData();
       _checkTutorial();
     });
@@ -133,11 +135,26 @@ class _MainScreenContentState extends State<MainScreenContent>
       // FIX: Rimosso check ridondante 'data is List'
       var data = await storage.loadAlarms();
       if (data.isNotEmpty) {
-        final notifs = NotificationService();
-        await notifs.init();
-        await notifs.scheduleAllMeals();
+        // NUOVO
+        if (mounted) {
+          // Chiediamo al provider di rischedulare usando i dati che possiede
+          await context.read<DietProvider>().scheduleMealNotifications();
+        }
       }
     } catch (_) {}
+  }
+
+// ✅ NUOVA FUNZIONE - Aggiungi questa
+  Future<void> _checkJailbreak() async {
+    try {
+      final isJailbroken = context.read<bool>();
+      if (isJailbroken) {
+        _showJailbreakWarning();
+      }
+    } catch (e) {
+      // Ignora errore se provider non disponibile
+      debugPrint('Jailbreak check error: $e');
+    }
   }
 
   // --- LOGICA TUTORIAL ---
@@ -207,6 +224,83 @@ class _MainScreenContentState extends State<MainScreenContent>
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text("Chiudi"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showJailbreakWarning() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.security, color: Colors.orange, size: 28),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "Dispositivo Non Sicuro",
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                "Il tuo dispositivo risulta modificato (jailbreak/root).",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 12),
+              Text(
+                "Questo comporta rischi per la sicurezza dei tuoi dati medici:",
+              ),
+              SizedBox(height: 8),
+              Text("• Malware può accedere ai tuoi dati"),
+              Text("• Le chiavi di cifratura potrebbero essere compromesse"),
+              Text("• App di terze parti possono intercettare informazioni"),
+              SizedBox(height: 16),
+              Text(
+                "Ti consigliamo vivamente di:",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text("• Usare un dispositivo non modificato"),
+              Text("• Ripristinare il dispositivo alle impostazioni originali"),
+              Text("• Contattare il supporto per assistenza"),
+              SizedBox(height: 16),
+              Text(
+                "Continuando, accetti che i tuoi dati potrebbero non essere completamente protetti.",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // ✅ Log accettazione warning
+              FirebaseAnalytics.instance.logEvent(
+                name: 'jailbreak_warning_accepted',
+                parameters: {
+                  'timestamp': DateTime.now().toIso8601String(),
+                },
+              );
+              Navigator.pop(ctx);
+            },
+            child: const Text(
+              "Ho capito, continua comunque",
+              style: TextStyle(color: Colors.orange),
+            ),
           ),
         ],
       ),
@@ -537,28 +631,114 @@ class _MainScreenContentState extends State<MainScreenContent>
 
   Future<void> _uploadDiet(BuildContext context) async {
     final provider = Provider.of<DietProvider>(context, listen: false);
+
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
-      if (result != null && result.files.single.path != null) {
-        await provider.uploadDiet(result.files.single.path!);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Dieta caricata!"),
-              backgroundColor: AppColors.primary,
+
+      if (result == null || result.files.single.path == null) {
+        return; // Utente ha annullato
+      }
+
+      final filePath = result.files.single.path!;
+      final fileName = result.files.single.name;
+
+      // ✅ Mostra dialog con progresso
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => PopScope(
+            canPop: false,
+            child: AlertDialog(
+              title: const Text("Caricamento Dieta"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ✅ Progress bar reale con Consumer
+                  Consumer<DietProvider>(
+                    builder: (_, prov, __) {
+                      final progress = prov.uploadProgress;
+                      final percentage = (progress * 100).toInt();
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: Colors.grey[200],
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.primary,
+                            ),
+                            minHeight: 8,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "$percentage%",
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            fileName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 16),
+                          // ✅ Messaggio dinamico basato su progresso
+                          Text(
+                            percentage < 95
+                                ? "Upload in corso..."
+                                : "Elaborazione AI...",
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
-          );
-        }
+          ),
+        );
+      }
+
+      // ✅ Esegui upload (progress viene tracciato automaticamente)
+      await provider.uploadDiet(filePath);
+
+      // Chiudi dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Dieta caricata con successo!"),
+            backgroundColor: AppColors.primary,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
+      // Chiudi dialog se aperto
       if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ErrorMapper.toUserMessage(e)),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -766,9 +946,13 @@ class _MainScreenContentState extends State<MainScreenContent>
                   onPressed: () async {
                     Navigator.pop(ctx);
                     await storage.saveAlarms(alarms);
-                    final notifs = NotificationService();
-                    await notifs.init();
-                    await notifs.scheduleAllMeals();
+                    // NUOVO
+                    if (mounted) {
+                      // Chiediamo al provider di rischedulare usando i dati che possiede
+                      await context
+                          .read<DietProvider>()
+                          .scheduleMealNotifications();
+                    }
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Allarmi aggiornati!")),

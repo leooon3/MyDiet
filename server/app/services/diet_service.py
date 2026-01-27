@@ -3,6 +3,7 @@ import re
 import io
 import pdfplumber
 import os
+import hashlib
 from google import genai
 from google.genai import types
 from app.core.config import settings
@@ -137,11 +138,23 @@ SIMPLIFIED SCHEMA RULES:
         # Applica sanitizzazione GDPR
         diet_text = self._sanitize_text(raw_text)
 
+        # ✅ CACHE LAYER 1: Calcola hash del contenuto
+        # Includiamo anche le custom instructions nell'hash per differenziare
+        cache_content = f"{diet_text}||{custom_instructions or 'default'}"
+        content_hash = hashlib.sha256(cache_content.encode('utf-8')).hexdigest()
+        
+        # ✅ CACHE LAYER 2: Controlla se esiste già in Firestore
+        cached_result = self._get_cached_response(content_hash)
+        if cached_result:
+            print(f"✅ Cache HIT per hash {content_hash[:8]}... (risparmio API)")
+            return cached_result
+
         model_name = settings.GEMINI_MODEL
         final_instruction = custom_instructions if custom_instructions else self.system_instruction
         
         try:
             print(f"🤖 Analisi Gemini ({model_name})... Custom Prompt: {bool(custom_instructions)}")
+            print(f"🔑 Cache MISS per hash {content_hash[:8]}... (chiamata API)")
             
             prompt = f"""
             Analizza il seguente testo ed estrai i dati della dieta e le sostituzioni CAD.
@@ -160,13 +173,83 @@ SIMPLIFIED SCHEMA RULES:
                 )
             )
             
+            # Estrai risultato
             if hasattr(response, 'parsed') and response.parsed:
-                return response.parsed
-            if hasattr(response, 'text') and response.text:
-                return self._extract_json_from_text(response.text)
+                result = response.parsed
+            elif hasattr(response, 'text') and response.text:
+                result = self._extract_json_from_text(response.text)
+            else:
+                raise ValueError("Risposta vuota da Gemini")
             
-            raise ValueError("Risposta vuota da Gemini")
+            # ✅ CACHE LAYER 3: Salva risultato in Firestore per riutilizzo futuro
+            self._save_cached_response(content_hash, result)
+            
+            return result
 
         except Exception as e:
             print(f"⚠️ Errore con Gemini: {e}")
             raise e
+    
+    def _get_cached_response(self, content_hash: str):
+        """
+        Cerca il risultato in cache Firestore.
+        Ritorna il risultato se esiste, altrimenti None.
+        """
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            
+            db = firestore.client()
+            cache_ref = db.collection('gemini_cache').document(content_hash)
+            cache_doc = cache_ref.get()
+            
+            if cache_doc.exists:
+                data = cache_doc.to_dict()
+                
+                # Verifica che la cache non sia troppo vecchia (es. 30 giorni)
+                from datetime import datetime, timedelta
+                cached_at = data.get('cached_at')
+                if cached_at:
+                    # Firestore timestamp to datetime
+                    cache_time = cached_at
+                    if isinstance(cache_time, datetime):
+                        age = datetime.now() - cache_time
+                        if age > timedelta(days=30):
+                            # Cache scaduta, eliminala
+                            cache_ref.delete()
+                            return None
+                
+                return data.get('result')
+            
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ Errore lettura cache: {e}")
+            return None  # Se la cache non funziona, prosegui con Gemini
+    
+    def _save_cached_response(self, content_hash: str, result):
+        """
+        Salva il risultato in cache Firestore per riutilizzo futuro.
+        Cache valida per 30 giorni.
+        """
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            from datetime import datetime
+            
+            db = firestore.client()
+            cache_ref = db.collection('gemini_cache').document(content_hash)
+            
+            # Salva con timestamp per tracking età cache
+            cache_ref.set({
+                'result': result,
+                'cached_at': datetime.now(),
+                'hash': content_hash[:8]  # Solo per debug
+            })
+            
+            print(f"💾 Risultato salvato in cache (hash: {content_hash[:8]}...)")
+            
+        except Exception as e:
+            print(f"⚠️ Errore salvataggio cache: {e}")
+            # Non blocchiamo l'operazione se il salvataggio cache fallisce
+            pass

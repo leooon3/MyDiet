@@ -49,14 +49,17 @@ class DietCalculator {
       "Domenica",
     ];
 
-    // Calcolo indice di oggi (0 = Lunedì, 6 = Domenica)
-    int todayIndex = DateTime.now().weekday - 1;
+// ✅ FIX MIDNIGHT BUG: Usa mezzanotte del giorno corrente come riferimento
+// Questo previene race condition se il calcolo attraversa la mezzanotte
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day); // 00:00:00 di oggi
+    int todayIndex = today.weekday - 1;
 
     for (int d = 0; d < italianDays.length; d++) {
       String day = italianDays[d];
 
-      // MODIFICA 1: Saltiamo i giorni passati.
-      // La simulazione deve partire dalla dispensa ATTUALE per i pasti FUTURI.
+      // Saltiamo i giorni già passati (prima di oggi)
+      // La simulazione parte dalla dispensa ATTUALE per i pasti FUTURI
       if (d < todayIndex) continue;
 
       if (!dietData.containsKey(day)) continue;

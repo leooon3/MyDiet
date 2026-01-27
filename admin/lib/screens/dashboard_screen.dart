@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:kybo_admin/widgets/diet_logo.dart';
 import 'user_management_view.dart';
 import 'config_view.dart';
 import 'audit_log_view.dart';
-import '../widgets/diet_logo.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});

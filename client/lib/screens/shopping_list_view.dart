@@ -178,9 +178,14 @@ class _ShoppingListViewState extends State<ShoppingListView> {
     );
   }
 
+  // Inserisci questo dentro _ShoppingListViewState
+
   void _generateListFromSelection() {
-    if (_selectedMealKeys.isEmpty) return;
-    Map<String, Map<String, dynamic>> neededItems = {};
+    if (widget.dietPlan == null) return;
+
+    // [FIX] Usiamo la struttura complessa richiesta da _addToAggregator
+    // Struttura: {'Nome Ingrediente': {'qty': 100.0, 'unit': 'g'}}
+    final Map<String, Map<String, dynamic>> neededItems = {};
 
     try {
       for (String key in _selectedMealKeys) {
@@ -190,38 +195,45 @@ class _ShoppingListViewState extends State<ShoppingListView> {
         var day = parts[0];
         var meal = parts[1];
 
-        // Accesso tipizzato: ottengo List<Dish>
         List<Dish>? foods = widget.dietPlan!.plan[day]?[meal];
         if (foods == null) continue;
 
-        // Iteriamo direttamente sui piatti (Dish)
         for (var dish in foods) {
-          // 1. Controllo Consumato (usando la proprietà dell'oggetto)
           if (dish.isConsumed) continue;
 
-          // 2. Generazione Chiave Swap
           String swapKey = (dish.instanceId.isNotEmpty)
               ? "$day::$meal::${dish.instanceId}"
               : "$day::$meal::${dish.cadCode}";
 
-          // 3. Determina cosa aggiungere (Swap o Originale)
           if (widget.activeSwaps.containsKey(swapKey)) {
-            // Logica Swap
+            // --- LOGICA SWAP ---
             final swap = widget.activeSwaps[swapKey]!;
             if (swap.swappedIngredients != null &&
                 swap.swappedIngredients!.isNotEmpty) {
               for (var ing in swap.swappedIngredients!) {
-                // Nota: activeSwap usa ancora mappe dinamiche per flessibilità interna
-                _addToAggregator(
-                    neededItems, ing['name'].toString(), ing['qty'].toString());
+                String name = "";
+                String qtyStr = "";
+
+                if (ing is Map) {
+                  name = ing['name']?.toString() ?? "";
+                  qtyStr = ing['qty']?.toString() ?? "";
+                } else {
+                  name = ing.toString();
+                }
+
+                if (name.isNotEmpty) {
+                  // Passiamo qtyStr, l'aggregator si occuperà del parsing
+                  _addToAggregator(neededItems, name, qtyStr);
+                }
               }
             } else {
+              // Swap semplice
               _addToAggregator(
                   neededItems, swap.name, "${swap.qty} ${swap.unit}");
             }
           } else {
-            // Logica Piatto Originale
-            if (dish.qty == "N/A") continue; // Skip header
+            // --- LOGICA PIATTO ORIGINALE ---
+            if (dish.qty == "N/A") continue;
 
             if (dish.isComposed) {
               for (var ing in dish.ingredients) {
@@ -233,94 +245,38 @@ class _ShoppingListViewState extends State<ShoppingListView> {
           }
         }
       }
-    } catch (e) {
-      debugPrint("Errore lista spesa: $e"); // Meglio loggare l'errore reale
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Errore generazione lista")));
-      return;
+
+      // Conversione finale per la lista (UI)
+      List<String> result = neededItems.entries.map((e) {
+        String name = e.key;
+        double qty = e.value['qty'] ?? 0.0;
+        String unit = e.value['unit'] ?? '';
+
+        // Formattazione pulita (100.0 -> 100)
+        String qtyDisplay = qty.toStringAsFixed(1);
+        if (qtyDisplay.endsWith(".0")) {
+          qtyDisplay = qtyDisplay.substring(0, qtyDisplay.length - 2);
+        }
+
+        return "$name ($qtyDisplay $unit)".trim();
+      }).toList();
+
+      result.sort();
+      widget.onUpdateList(result);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Aggiunti ${result.length} elementi!")),
+      );
+
+      setState(() {
+        _selectedMealKeys.clear();
+      });
+    } catch (e, stack) {
+      debugPrint("Errore ShoppingList: $e $stack");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Errore creazione lista.")),
+      );
     }
-
-    // --- (Il resto della funzione rimane identico) ---
-    List<String> newList = List.from(widget.shoppingList);
-    int addedCount = 0;
-
-    List<PantryItem> tempPantry = widget.pantryItems
-        .map(
-          (p) => PantryItem(name: p.name, quantity: p.quantity, unit: p.unit),
-        )
-        .toList();
-
-    neededItems.forEach((name, data) {
-      double neededQty = data['qty'];
-      String unit = data['unit'];
-      String cleanNameLower = name.trim().toLowerCase();
-
-      var pantryMatch = tempPantry.where((p) {
-        String pName = p.name.trim().toLowerCase();
-        return pName == cleanNameLower ||
-            cleanNameLower.contains(pName) ||
-            pName.contains(cleanNameLower);
-      }).firstOrNull;
-
-      double existingQty = 0.0;
-      if (pantryMatch != null) {
-        existingQty = pantryMatch.quantity;
-        // Semplice conversione Kg/g e L/ml
-        if (pantryMatch.unit.toLowerCase() == 'kg' &&
-            unit.toLowerCase() == 'g') {
-          existingQty *= 1000;
-        }
-        if (pantryMatch.unit.toLowerCase() == 'l' &&
-            unit.toLowerCase() == 'ml') {
-          existingQty *= 1000;
-        }
-      }
-
-      double finalQty = neededQty - existingQty;
-
-      if (pantryMatch != null) {
-        if (finalQty <= 0) {
-          double consumed = neededQty;
-          if (pantryMatch.unit.toLowerCase() == 'kg' &&
-              unit.toLowerCase() == 'g') {
-            consumed /= 1000;
-          }
-          if (pantryMatch.unit.toLowerCase() == 'l' &&
-              unit.toLowerCase() == 'ml') {
-            consumed /= 1000;
-          }
-          pantryMatch.quantity = (pantryMatch.quantity - consumed).clamp(
-            0.0,
-            9999.0,
-          );
-        } else {
-          pantryMatch.quantity = 0.0;
-        }
-      }
-
-      if (finalQty > 0) {
-        String displayQty = finalQty % 1 == 0
-            ? finalQty.toInt().toString()
-            : finalQty.toStringAsFixed(1);
-        String entry = (finalQty == 0 || unit.isEmpty)
-            ? name
-            : "$name ($displayQty $unit)";
-        if (!newList.any((e) => e == entry)) {
-          newList.add(entry);
-          addedCount++;
-        }
-      }
-    });
-
-    setState(() => _selectedMealKeys.clear());
-    widget.onUpdateList(newList);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Aggiunti $addedCount prodotti!"),
-        backgroundColor: AppColors.primary,
-      ),
-    );
   }
 
   void _addToAggregator(

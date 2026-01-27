@@ -1,23 +1,29 @@
 import 'dart:convert';
+import 'package:kybo/services/upload_client.dart';
+
 import '../services/api_client.dart';
 import '../models/diet_models.dart';
 
 class DietRepository {
   final ApiClient _client = ApiClient();
+  final UploadClient _uploadClient = UploadClient();
 
-  Future<DietPlan> uploadDiet(String filePath, {String? fcmToken}) async {
-    // Non serve try-catch qui: se fallisce, l'errore risale al Provider
-    // che mostrerà il messaggio utente corretto.
-
+  Future<DietPlan> uploadDiet(
+    String filePath, {
+    String? fcmToken,
+    Function(double progress)? onProgress, // ✅ AGGIUNGI callback
+  }) async {
     final Map<String, String> fields = {};
     if (fcmToken != null) {
       fields['fcm_token'] = fcmToken;
     }
 
-    final response = await _client.uploadFile(
-      '/upload-diet',
-      filePath,
+    // ✅ USA il nuovo UploadClient con progress
+    final response = await _uploadClient.uploadFile(
+      endpoint: '/upload-diet',
+      filePath: filePath,
       fields: fields,
+      onProgress: onProgress, // ✅ Passa callback
     );
 
     return DietPlan.fromJson(response);
@@ -36,5 +42,9 @@ class DietRepository {
     );
 
     return response as List<dynamic>;
+  }
+
+  void dispose() {
+    _uploadClient.dispose();
   }
 }

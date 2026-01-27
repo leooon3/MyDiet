@@ -1,11 +1,63 @@
 import os
+import re
 import uuid
 import structlog
 import aiofiles
 import json
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
+
+def sanitize_sensitive_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Rimuove dati sensibili da dizionari prima di loggarli.
+    Protegge token, password, email, dati medici.
+    """
+    if not isinstance(data, dict):
+        return data
+    
+    sanitized = data.copy()
+    
+    sensitive_keys = [
+        'authorization', 'token', 'password', 'secret',
+        'api_key', 'apikey', 'bearer', 'jwt',
+        'fcm_token', 'refresh_token', 'access_token',
+        'email', 'phone', 'ssn', 'credit_card',
+    ]
+    
+    for key in list(sanitized.keys()):
+        key_lower = key.lower()
+        
+        if any(sens in key_lower for sens in sensitive_keys):
+            sanitized[key] = '***REDACTED***'
+        
+        elif isinstance(sanitized[key], dict):
+            sanitized[key] = sanitize_sensitive_data(sanitized[key])
+        
+        elif isinstance(sanitized[key], list):
+            sanitized[key] = [
+                sanitize_sensitive_data(item) if isinstance(item, dict) else item
+                for item in sanitized[key]
+            ]
+    
+    return sanitized
+
+
+def sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
+    """Sanitizza headers HTTP rimuovendo token di autenticazione."""
+    sanitized = dict(headers)  # Converti da UploadFile headers
+    
+    if 'authorization' in sanitized:
+        auth_value = sanitized['authorization']
+        if auth_value.startswith('Bearer '):
+            token = auth_value[7:]
+            if len(token) > 8:
+                sanitized['authorization'] = f"Bearer {token[:4]}...{token[-4:]}"
+            else:
+                sanitized['authorization'] = "Bearer ***"
+    
+    return sanitized
+
 
 import firebase_admin
 from firebase_admin import credentials, auth, firestore, messaging
@@ -37,9 +89,34 @@ MEAL_ORDER = [
     "Merenda", "Cena", "Spuntino Serale", "Nell'Arco Della Giornata"
 ]
 
+# ✅ Custom processor per sanitizzare dati sensibili
+class SensitiveDataFilter(structlog.processors.TimeStamper):
+    """Filtra automaticamente token e dati sensibili dai log"""
+    
+    def __call__(self, logger, method_name, event_dict):
+        # Censura pattern comuni di token JWT
+        if 'error' in event_dict:
+            error_str = str(event_dict['error'])
+            # Regex per token Bearer
+            error_str = re.sub(
+                r'Bearer\s+[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+',
+                'Bearer ***REDACTED***',
+                error_str
+            )
+            # Censura email
+            error_str = re.sub(
+                r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+                '***@***.***',
+                error_str
+            )
+            event_dict['error'] = error_str
+        
+        return event_dict
+
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
+        SensitiveDataFilter(),  # ✅ AGGIUNGI QUESTO
         structlog.processors.JSONRenderer()
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -63,7 +140,12 @@ if not firebase_admin._apps:
             logger.info("firebase_init_success", method="adc")
             
     except Exception as e:
-        logger.error("firebase_init_critical_error", error=str(e))
+        error_msg = str(e)
+    # Rimuovi token se presenti nell'errore
+    error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+    error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+    
+    logger.error("upload_diet_error", error=error_msg)
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
@@ -191,10 +273,20 @@ async def maintenance_worker():
                                 "updated_by": "system_scheduler"
                             })
                     except Exception as e:
-                        logger.error("scheduler_error", error=str(e))
+                        error_msg = str(e)
+                        # Rimuovi token se presenti nell'errore
+                        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+                        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+                        
+                        logger.error("upload_diet_error", error=error_msg)
         except Exception as e:
-            logger.error("worker_crash", error=str(e))
-        
+            error_msg = str(e)
+            # Rimuovi token se presenti nell'errore
+            error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+            error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+            
+            logger.error("upload_diet_error", error=error_msg)
+            
         await asyncio.sleep(60)
 
 @app.on_event("startup")
@@ -204,7 +296,14 @@ async def start_background_tasks():
 # --- ENDPOINTS ---
 @app.post("/upload-diet", response_model=DietResponse)
 @limiter.limit("5/minute")
-async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), user_id: str = Depends(get_current_uid)):
+async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token: Optional[str] = Form(None), token: dict = Depends(verify_token)):
+    user_id = token['uid']
+    user_role = token.get('role', 'user')
+    if user_role not in ['independent', 'admin']:
+        raise HTTPException(
+            status_code=403, 
+            detail="Solo utenti indipendenti e admin possono caricare diete. I clienti ricevono le diete dal nutrizionista."
+        )
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
     
     async with heavy_tasks_semaphore:
@@ -231,26 +330,18 @@ async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token:
             # A. Salviamo/Sovrascriviamo la dieta "current" (Quella che l'app carica)
             user_diets_ref.document('current').set(diet_payload)
 
-            # B. Aggiungiamo anche allo storico (Backup cronologico)
-            # Nota: Non ci serve l'ID di questo doc nel client, usiamo 'current'
-            user_diets_ref.add(diet_payload)
-            
-            # C. (Opzionale) Global Admin History
-            db.collection('diet_history').add({
-                'userId': user_id,
-                'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP,
-                'fileName': file.filename,
-                'parsedData': dict_data,
-                'uploadedBy': user_id
-            })
-
             # 3. Notifica
             if fcm_token: await run_in_threadpool(notification_service.send_diet_ready, fcm_token)
             
             return formatted_data
 
         except Exception as e:
-            logger.error("upload_diet_error", error=str(e))
+            error_msg = str(e)
+            # Rimuovi token se presenti nell'errore
+            error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+            error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+            
+            logger.error("upload_diet_error", error=error_msg)
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             await file.close()
@@ -308,7 +399,12 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
         return formatted_data
 
     except Exception as e:
-        logger.error("admin_upload_error", error=str(e))
+        error_msg = str(e)
+        # Rimuovi token se presenti nell'errore
+        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+        
+        logger.error("upload_diet_error", error=error_msg)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await file.close()
@@ -325,7 +421,12 @@ async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_f
             
         return JSONResponse(content=found_items)
     except Exception as e:
-        logger.error("scan_receipt_error", error=str(e))
+        error_msg = str(e)
+        # Rimuovi token se presenti nell'errore
+        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+        
+        logger.error("upload_diet_error", error=error_msg)
         raise HTTPException(status_code=500, detail="Errore durante la scansione dello scontrino")
     finally:
         await file.close()
@@ -421,20 +522,41 @@ async def admin_unassign_user(body: UnassignUserRequest, requester: dict = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Incolla/Sostituisci in server/app/main.py
 
-def _delete_collection_documents(coll_ref, batch_size=50):
-    """Helper per cancellare documenti in batch"""
-    docs = coll_ref.limit(batch_size).stream()
-    deleted = 0
-    for doc in docs:
-        # Se ci sono sottocollezioni annidiate (es. dentro history), andrebbero gestite qui.
-        # Per la struttura attuale di Kybo (profondità 1), basta delete().
-        doc.reference.delete()
-        deleted += 1
+def _delete_collection_documents(coll_ref, batch_size=500):
+    """
+    Helper per cancellare documenti in batch con loop iterativo.
+    Usa batch write per efficienza e previene stack overflow.
+    """
+    db = firebase_admin.firestore.client()
+    total_deleted = 0
     
-    if deleted >= batch_size:
-        return _delete_collection_documents(coll_ref, batch_size)
+    while True:
+        # Recupera un batch di documenti
+        docs = list(coll_ref.limit(batch_size).stream())
+        
+        if not docs:
+            break  # ✅ Nessun documento rimasto, esci dal loop
+        
+        # ✅ Usa batch write per efficienza (più veloce di delete singoli)
+        batch = db.batch()
+        for doc in docs:
+            batch.delete(doc.reference)
+        
+        # Esegui batch delete
+        batch.commit()
+        total_deleted += len(docs)
+        
+        # Log progresso per debug
+        if total_deleted % 1000 == 0:
+            print(f"🗑️  Eliminati {total_deleted} documenti...")
+        
+        # Se abbiamo eliminato meno di batch_size, significa che abbiamo finito
+        if len(docs) < batch_size:
+            break
+    
+    print(f"✅ Eliminazione completata: {total_deleted} documenti totali")
+    return total_deleted
 
 @app.delete("/admin/delete-user/{target_uid}")
 async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_professional)):
@@ -482,7 +604,12 @@ async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_pr
         
     except HTTPException as he: raise he
     except Exception as e:
-        logger.error("delete_user_critical_error", error=str(e))
+        error_msg = str(e)
+        # Rimuovi token se presenti nell'errore
+        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+        
+        logger.error("upload_diet_error", error=error_msg)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/admin/delete-diet/{diet_id}")
@@ -523,23 +650,79 @@ async def admin_delete_diet(diet_id: str, requester: dict = Depends(verify_profe
 async def admin_sync_users(requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
+        
+        # ✅ STEP 1: Carica TUTTI i documenti Firestore in UNA query
+        users_ref = db.collection('users')
+        firestore_docs = users_ref.stream()
+        
+        # Crea una mappa {uid: doc_data} per lookup O(1)
+        firestore_map = {}
+        firestore_emails = {}  # {email: [uid1, uid2, ...]} per trovare duplicati
+        
+        for doc in firestore_docs:
+            data = doc.to_dict()
+            firestore_map[doc.id] = data
+            email = data.get('email', '').lower()
+            if email:
+                if email not in firestore_emails:
+                    firestore_emails[email] = []
+                firestore_emails[email].append(doc.id)
+        
+        # ✅ STEP 2: Prepara batch operations
+        batch = db.batch()
+        batch_operations = 0
+        MAX_BATCH_SIZE = 500  # Firestore limit
+        
         count = 0
-        for user in auth.list_users().users:
-            email_docs = db.collection('users').where('email', '==', user.email).stream()
-            for doc in email_docs:
-                if doc.id != user.uid: doc.reference.delete()
-
-            current_role = 'independent'
-            user_doc = db.collection('users').document(user.uid).get()
-            if user_doc.exists: current_role = user_doc.to_dict().get('role', 'independent')
+        auth_users = auth.list_users().users
+        
+        for user in auth_users:
+            email_lower = user.email.lower() if user.email else ''
+            
+            # ✅ Rimuovi duplicati email (se esistono)
+            if email_lower in firestore_emails:
+                for uid in firestore_emails[email_lower]:
+                    if uid != user.uid:
+                        # Batch delete invece di delete immediato
+                        batch.delete(users_ref.document(uid))
+                        batch_operations += 1
+                        
+                        if batch_operations >= MAX_BATCH_SIZE:
+                            batch.commit()
+                            batch = db.batch()
+                            batch_operations = 0
+            
+            # ✅ Controlla se utente esiste in Firestore (lookup O(1) invece di query)
+            if user.uid in firestore_map:
+                current_role = firestore_map[user.uid].get('role', 'independent')
             else:
-                db.collection('users').document(user.uid).set({
-                    'uid': user.uid, 'email': user.email, 'role': 'independent',
-                    'first_name': 'App', 'last_name': '', 'created_at': firebase_admin.firestore.SERVER_TIMESTAMP
+                # Crea nuovo documento in batch
+                current_role = 'independent'
+                batch.set(users_ref.document(user.uid), {
+                    'uid': user.uid,
+                    'email': user.email,
+                    'role': 'independent',
+                    'first_name': 'App',
+                    'last_name': '',
+                    'created_at': firebase_admin.firestore.SERVER_TIMESTAMP
                 })
+                batch_operations += 1
+                
+                if batch_operations >= MAX_BATCH_SIZE:
+                    batch.commit()
+                    batch = db.batch()
+                    batch_operations = 0
+            
+            # ✅ Aggiorna custom claims (purtroppo non c'è batch API per questo)
             auth.set_custom_user_claims(user.uid, {'role': current_role})
             count += 1
-        return {"message": f"Synced {count} users"}
+        
+        # ✅ Commit finale batch se ci sono operazioni pending
+        if batch_operations > 0:
+            batch.commit()
+        
+        return {"message": f"Synced {count} users efficiently"}
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -610,7 +793,12 @@ async def get_secure_user_history(target_uid: str, requester: dict = Depends(ver
         return results
     except HTTPException as he: raise he
     except Exception as e:
-        logger.error("secure_gateway_error", error=str(e))
+        error_msg = str(e)
+        # Rimuovi token se presenti nell'errore
+        error_msg = re.sub(r'Bearer\s+[A-Za-z0-9\-_\.]+', 'Bearer ***', error_msg)
+        error_msg = re.sub(r'token["\']?\s*:\s*["\']?[A-Za-z0-9\-_\.]+', 'token: ***', error_msg, flags=re.IGNORECASE)
+        
+        logger.error("upload_diet_error", error=error_msg)
         raise HTTPException(status_code=500, detail="Error fetching history")
 
 @app.get("/admin/users-secure")
