@@ -11,8 +11,9 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
 
+    // [SECURITY FIX] Config globale leggibile solo da utenti autenticati
     match /config/global {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if hasRole('admin');
     }
 
@@ -22,8 +23,11 @@ service cloud.firestore {
                   hasRole('admin') || 
                   (hasRole('nutritionist') && (resource.data.parent_id == request.auth.uid || resource.data.created_by == request.auth.uid));
       
-      // WRITE: Create Invariato
-      allow create: if isSignedIn();
+      // [SECURITY FIX] Create: Solo il proprio profilo con validazione campi
+      allow create: if isOwner(userId) &&
+                       request.resource.data.keys().hasAll(['uid', 'email', 'role']) &&
+                       request.resource.data.uid == userId &&
+                       request.resource.data.role in ['independent', 'user'];
 
       // UPDATE: Invariato
       allow update: if (isOwner(userId) && 

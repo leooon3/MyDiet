@@ -30,6 +30,7 @@ class DietProvider extends ChangeNotifier {
   Map<String, bool> _availabilityMap = {};
   Map<String, double> _conversions = {};
   bool _isCalculating = false;
+  DateTime? _calculationStartTime; // [FIX] Per timeout del lock
 
   // Campi per il Sync Intelligente
   DateTime _lastCloudSave = DateTime.fromMillisecondsSinceEpoch(0);
@@ -113,9 +114,9 @@ class DietProvider extends ChangeNotifier {
     }
   }
 
-  // Helper privato per triggerare il sync dopo update manuali
-  void _triggerSmartSyncCheck() {
-    if (_auth.currentUser != null) {
+  // [FIX] Helper privato per triggerare il sync dopo update manuali - ora async
+  Future<void> _triggerSmartSyncCheck() async {
+    if (_auth.currentUser != null && _dietPlan != null) {
       bool timePassed =
           DateTime.now().difference(_lastCloudSave) > _cloudSaveInterval;
 
@@ -127,8 +128,7 @@ class DietProvider extends ChangeNotifier {
           jsonEncode(currentSubsJson) != jsonEncode(_lastSyncedSubstitutions);
 
       if (timePassed && isStructurallyDifferent) {
-        runSmartSyncCheck(
-            forceSync: true); // Riutilizziamo la logica principale
+        await runSmartSyncCheck(forceSync: true); // [FIX] Ora awaited
         debugPrint("☁️ Auto-Sync attivato da modifica manuale");
       }
     }
@@ -259,7 +259,8 @@ class DietProvider extends ChangeNotifier {
 
   // --- LOGICA CONSUMO & AGGIORNAMENTO ---
 
-  void updateDietMeal(
+  // [FIX] Cambiato da void a Future<void> per permettere await
+  Future<void> updateDietMeal(
     String day,
     String meal,
     int unsafeIndex,
@@ -314,10 +315,10 @@ class DietProvider extends ChangeNotifier {
       // 4. Salva (Serializzando l'oggetto)
       await _storage.saveDiet(_dietPlan!.toJson());
 
-      // 5. Trigger Sync Intelligente
-      _triggerSmartSyncCheck();
+      // 5. Trigger Sync Intelligente [FIX] Ora awaited
+      await _triggerSmartSyncCheck();
 
-      _recalcAvailability();
+      await _recalcAvailability();
       notifyListeners();
     }
   }
@@ -582,15 +583,23 @@ class DietProvider extends ChangeNotifier {
   }
 
   Future<void> _recalcAvailability() async {
-    // ✅ PROTEZIONE: Se c'è già un calcolo in corso, ignora questa chiamata
+    // [FIX] PROTEZIONE con timeout: Se c'è già un calcolo in corso, verifica timeout
     if (_isCalculating) {
-      debugPrint("⏭️ Calcolo availability già in corso, skip");
-      return;
+      // Timeout di 30 secondi per evitare lock permanente
+      if (_calculationStartTime != null &&
+          DateTime.now().difference(_calculationStartTime!).inSeconds > 30) {
+        debugPrint("⚠️ Lock calcolo scaduto, reset forzato");
+        _isCalculating = false;
+      } else {
+        debugPrint("⏭️ Calcolo availability già in corso, skip");
+        return;
+      }
     }
 
     if (_dietPlan == null) return;
 
     _isCalculating = true; // ✅ LOCK attivato
+    _calculationStartTime = DateTime.now(); // [FIX] Timestamp per timeout
 
     // Serializziamo il piano perchè l'Isolate lavora con dati puri
     final planJson = _dietPlan!.toJson()['plan'];
@@ -620,8 +629,8 @@ class DietProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint("Isolate Calc Error: $e");
     } finally {
-      _isCalculating =
-          false; // ✅ LOCK rilasciato (sempre, anche in caso di errore)
+      _isCalculating = false; // ✅ LOCK rilasciato (sempre, anche in caso di errore)
+      _calculationStartTime = null; // [FIX] Reset timestamp
     }
   }
 

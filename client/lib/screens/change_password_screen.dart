@@ -21,8 +21,17 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       _showError("Le password non coincidono");
       return;
     }
-    if (_passCtrl.text.length < 6) {
-      _showError("La password deve avere almeno 6 caratteri");
+    // [SECURITY] Password minima aumentata a 12 caratteri
+    if (_passCtrl.text.length < 12) {
+      _showError("La password deve avere almeno 12 caratteri");
+      return;
+    }
+    // [SECURITY] Verifica complessità password
+    final hasUppercase = _passCtrl.text.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = _passCtrl.text.contains(RegExp(r'[a-z]'));
+    final hasDigit = _passCtrl.text.contains(RegExp(r'[0-9]'));
+    if (!hasUppercase || !hasLowercase || !hasDigit) {
+      _showError("La password deve contenere maiuscole, minuscole e numeri");
       return;
     }
 

@@ -7,7 +7,8 @@ thefuzz==0.20.0
 # [SECURITY] Patched Buffer Overflow Vulnerability
 Pillow>=10.3.0
 pytesseract==0.3.10
-google-genai
+# [SECURITY] Pinned version to prevent supply chain attacks
+google-genai==1.0.0
 pydantic==2.6.0
 pydantic-settings==2.1.0
 python-dotenv==1.0.1

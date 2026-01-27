@@ -33,7 +33,7 @@ from fastapi.concurrency import run_in_threadpool
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from pydantic import Json, BaseModel
+from pydantic import Json, BaseModel, EmailStr, field_validator
 
 # --- IMPORTS ---
 from app.services.diet_service import DietParser
@@ -116,12 +116,35 @@ diet_parser = DietParser()
 
 # --- SCHEMAS ---
 class CreateUserRequest(BaseModel):
-    email: str
+    email: EmailStr  # [SECURITY] Validazione email
     password: str
     role: str
     first_name: str
     last_name: str
     parent_id: Optional[str] = None
+
+    # [SECURITY] Validazione password
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 12:
+            raise ValueError('La password deve avere almeno 12 caratteri')
+        if not any(c.isupper() for c in v):
+            raise ValueError('La password deve contenere almeno una maiuscola')
+        if not any(c.islower() for c in v):
+            raise ValueError('La password deve contenere almeno una minuscola')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('La password deve contenere almeno un numero')
+        return v
+
+    # [SECURITY] Validazione ruolo
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        allowed_roles = ['user', 'independent', 'nutritionist', 'admin']
+        if v not in allowed_roles:
+            raise ValueError(f'Ruolo non valido. Ruoli permessi: {allowed_roles}')
+        return v
 
 class UpdateUserRequest(BaseModel):
     email: Optional[str] = None
@@ -243,6 +266,12 @@ async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token:
         )
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
 
+    # [SECURITY] Validazione dimensione file
+    file_content = await file.read()
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File troppo grande. Massimo 10MB.")
+    await file.seek(0)  # Reset file pointer
+
     async with heavy_tasks_semaphore:
         try:
             # 1. Parsing
@@ -286,7 +315,7 @@ async def upload_diet(request: Request, file: UploadFile = File(...), fcm_token:
 
         except Exception as e:
             logger.error("upload_diet_error", error=sanitize_error_message(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Errore durante l'elaborazione della dieta. Riprova.")
         finally:
             await file.close()
 
@@ -298,7 +327,13 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
     requester_role = requester['role']
 
     if not file.filename.lower().endswith('.pdf'): raise HTTPException(status_code=400, detail="Only PDF allowed")
-    
+
+    # [SECURITY] Validazione dimensione file
+    file_content = await file.read()
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File troppo grande. Massimo 10MB.")
+    await file.seek(0)  # Reset file pointer
+
     db = firebase_admin.firestore.client()
     # ... (Verifica permessi nutrizionista invariata) ...
     if requester_role == 'nutritionist':
@@ -344,13 +379,23 @@ async def upload_diet_admin(request: Request, target_uid: str, file: UploadFile 
 
     except Exception as e:
         logger.error("admin_upload_diet_error", error=sanitize_error_message(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Errore durante l'elaborazione della dieta. Riprova.")
     finally:
         await file.close()
 
 
 @app.post("/scan-receipt")
+@limiter.limit("10/minute")
 async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_foods: Json[List[str]] = Form(...), user_id: str = Depends(get_current_uid)):
+    # [SECURITY] Validazione dimensione file e lista allowed_foods
+    file_content = await file.read()
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File troppo grande. Massimo 10MB.")
+    await file.seek(0)
+
+    if len(allowed_foods) > 5000:
+        raise HTTPException(status_code=400, detail="Lista alimenti troppo grande.")
+
     try:
         current_scanner = ReceiptScanner(allowed_foods_list=allowed_foods)
         
@@ -368,7 +413,8 @@ async def scan_receipt(request: Request, file: UploadFile = File(...), allowed_f
 # --- USER MANAGEMENT ---
 
 @app.post("/admin/create-user")
-async def admin_create_user(body: CreateUserRequest, requester: dict = Depends(verify_professional)): # [1] Permesso allargato
+@limiter.limit("20/minute")
+async def admin_create_user(request: Request, body: CreateUserRequest, requester: dict = Depends(verify_professional)): # [1] Permesso allargato
     try:
         # [2] Logica per Nutrizionista: Forza ruolo e parent_id
         if requester['role'] == 'nutritionist':
@@ -393,7 +439,8 @@ async def admin_create_user(body: CreateUserRequest, requester: dict = Depends(v
         })
         return {"uid": user.uid, "message": "User created"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("create_user_error", error=sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Errore durante la creazione dell'utente. Verifica i dati e riprova.")
     
 @app.put("/admin/update-user/{target_uid}")
 async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester: dict = Depends(verify_admin)):
@@ -418,7 +465,8 @@ async def admin_update_user(target_uid: str, body: UpdateUserRequest, requester:
         if fs_update: db.collection('users').document(target_uid).update(fs_update)
         return {"message": "User updated"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("update_user_error", error=sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Errore durante l'aggiornamento dell'utente.")
 
 @app.post("/admin/assign-user")
 async def admin_assign_user(body: AssignUserRequest, requester: dict = Depends(verify_admin)):
@@ -436,7 +484,8 @@ async def admin_assign_user(body: AssignUserRequest, requester: dict = Depends(v
         auth.set_custom_user_claims(body.target_uid, {'role': 'user'})
         return {"message": "User assigned"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("assign_user_error", error=sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Errore durante l'assegnazione dell'utente.")
 
 @app.post("/admin/unassign-user")
 async def admin_unassign_user(body: UnassignUserRequest, requester: dict = Depends(verify_admin)):
@@ -454,7 +503,8 @@ async def admin_unassign_user(body: UnassignUserRequest, requester: dict = Depen
         auth.set_custom_user_claims(body.target_uid, {'role': 'independent'})
         return {"message": "User unassigned"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("unassign_user_error", error=sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Errore durante la rimozione dell'assegnazione.")
 
 
 def _delete_collection_documents(coll_ref, batch_size=500):
@@ -493,7 +543,8 @@ def _delete_collection_documents(coll_ref, batch_size=500):
     return total_deleted
 
 @app.delete("/admin/delete-user/{target_uid}")
-async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_professional)):
+@limiter.limit("10/minute")
+async def admin_delete_user(request: Request, target_uid: str, requester: dict = Depends(verify_professional)):
     requester_id = requester['uid']
     requester_role = requester['role']
     
@@ -531,15 +582,19 @@ async def admin_delete_user(target_uid: str, requester: dict = Depends(verify_pr
         user_ref.delete()
 
         # 6. Cancellazione Auth (Login)
-        try: auth.delete_user(target_uid)
-        except: pass # Se l'utente Auth non esiste più, ignora.
+        try:
+            auth.delete_user(target_uid)
+        except auth.UserNotFoundError:
+            logger.warning("delete_user_auth_not_found", target_uid=target_uid)
+        except Exception as auth_err:
+            logger.error("delete_user_auth_error", error=sanitize_error_message(auth_err))
 
         return {"message": "User and all related data permanently deleted"}
         
     except HTTPException as he: raise he
     except Exception as e:
         logger.error("delete_user_error", error=sanitize_error_message(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Errore durante l'eliminazione dell'utente.")
 
 @app.delete("/admin/delete-diet/{diet_id}")
 async def admin_delete_diet(diet_id: str, requester: dict = Depends(verify_professional)):
@@ -573,10 +628,12 @@ async def admin_delete_diet(diet_id: str, requester: dict = Depends(verify_profe
         return {"message": "Diet deleted"}
     except HTTPException as he: raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("delete_diet_error", error=sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Errore durante l'eliminazione della dieta.")
 
 @app.post("/admin/sync-users")
-async def admin_sync_users(requester: dict = Depends(verify_admin)):
+@limiter.limit("2/minute")
+async def admin_sync_users(request: Request, requester: dict = Depends(verify_admin)):
     try:
         db = firebase_admin.firestore.client()
         
@@ -651,9 +708,10 @@ async def admin_sync_users(requester: dict = Depends(verify_admin)):
             batch.commit()
         
         return {"message": f"Synced {count} users efficiently"}
-        
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("sync_users_error", error=sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Errore durante la sincronizzazione degli utenti.")
     
 @app.post("/admin/upload-parser/{target_uid}")
 async def upload_parser_config(target_uid: str, file: UploadFile = File(...), requester: dict = Depends(verify_admin)):
@@ -665,12 +723,14 @@ async def upload_parser_config(target_uid: str, file: UploadFile = File(...), re
             'custom_parser_prompt': content, 'has_custom_parser': True,
             'parser_updated_at': firebase_admin.firestore.SERVER_TIMESTAMP
         })
+        # [FIX] Naming convention uniformata a camelCase come diet_history
         db.collection('users').document(target_uid).collection('parser_history').add({
-            'content': content, 'uploaded_at': firebase_admin.firestore.SERVER_TIMESTAMP, 'uploaded_by': requester_id
+            'content': content, 'uploadedAt': firebase_admin.firestore.SERVER_TIMESTAMP, 'uploadedBy': requester_id
         })
         return {"message": "Updated"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("upload_parser_error", error=sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Errore durante l'aggiornamento del parser.")
 
 # --- SECURE GATEWAY ---
 
@@ -787,8 +847,10 @@ async def schedule_maintenance(req: ScheduleMaintenanceRequest, requester: dict 
         "scheduled_maintenance_start": req.scheduled_time, "maintenance_message": req.message, "is_scheduled": True
     }, merge=True)
     if req.notify:
-        try: broadcast_message(title="System Update", body=req.message, data={"type": "maintenance_alert"})
-        except: pass
+        try:
+            broadcast_message(title="System Update", body=req.message, data={"type": "maintenance_alert"})
+        except Exception as broadcast_err:
+            logger.error("broadcast_maintenance_error", error=sanitize_error_message(broadcast_err))
     return {"status": "scheduled"}
 
 @app.post("/admin/cancel-maintenance")
